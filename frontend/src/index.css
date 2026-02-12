@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+@theme {
+  /* Backgrounds — slightly blue-tinted for depth */
+  --color-bg-primary: #08090D;
+  --color-bg-surface: #0F1118;
+  --color-bg-surface-header: #0B0D14;
+  --color-bg-hover: #161822;
+
+  /* Borders */
+  --color-border-default: #1C1E2E;
+  --color-border-strong: #282A3A;
+
+  /* Text — 3 levels */
+  --color-text-primary: #EEEEF3;
+  --color-text-body: #888899;
+  --color-text-faint: #4E4E5E;
+
+  /* Accent — teal */
+  --color-accent: #14b8a6;
+
+  /* Code colors */
+  --color-code-keyword: #5eead4;
+  --color-code-string: #34d399;
+
+  /* Fonts — serif display for editorial tension, sans for UI */
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Noise texture overlay */
+.noise-overlay::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  opacity: 0.025;
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* Dot grid pattern */
+.dot-grid {
+  background-image: radial-gradient(circle, rgba(238, 238, 243, 0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* ---- Hero asset animations ---- */
+
+/* Frequency bar oscillation */
+@keyframes freq-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+/* Ring pulse outward */
+@keyframes ring-pulse {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Slow gradient blob drift */
+@keyframes drift-1 {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(30px, -20px); }
+  66% { transform: translate(-20px, 15px); }
+}
+
+@keyframes drift-2 {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(-25px, 20px); }
+  66% { transform: translate(15px, -25px); }
+}
+
+@keyframes drift-3 {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(20px, 25px); }
+  66% { transform: translate(-30px, -10px); }
+}
+
+/* Slow rotation for agent feedback loop */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ---- Scrollbar & selection ---- */
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #08090D;
+}
+::-webkit-scrollbar-thumb {
+  background: #1C1E2E;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #282A3A;
+}
+
+::selection {
+  background-color: rgba(20, 184, 166, 0.3);
+  color: #EEEEF3;
+}
