@@ -58,38 +58,7 @@ body {
   background-size: 24px 24px;
 }
 
-/* ---- Hero asset animations ---- */
-
-/* Frequency bar oscillation */
-@keyframes freq-bar {
-  0%, 100% { transform: scaleY(0.3); }
-  50% { transform: scaleY(1); }
-}
-
-/* Ring pulse outward */
-@keyframes ring-pulse {
-  0% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(1.6); opacity: 0; }
-}
-
-/* Slow gradient blob drift */
-@keyframes drift-1 {
-  0%, 100% { transform: translate(0, 0); }
-  33% { transform: translate(30px, -20px); }
-  66% { transform: translate(-20px, 15px); }
-}
-
-@keyframes drift-2 {
-  0%, 100% { transform: translate(0, 0); }
-  33% { transform: translate(-25px, 20px); }
-  66% { transform: translate(15px, -25px); }
-}
-
-@keyframes drift-3 {
-  0%, 100% { transform: translate(0, 0); }
-  33% { transform: translate(20px, 25px); }
-  66% { transform: translate(-30px, -10px); }
-}
+/* ---- Animations ---- */
 
 /* Slow rotation for agent feedback loop */
 @keyframes spin-slow {

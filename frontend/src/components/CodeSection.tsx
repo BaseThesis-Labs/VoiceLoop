@@ -143,8 +143,21 @@ export default function CodeSection() {
 
   return (
     <section id="code" className="relative py-24">
-      {/* Divider */}
+      {/* Spotlight gradient band */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        aria-hidden="true"
+        style={{
+          background: `
+            radial-gradient(ellipse 900px 350px at 50% 55%, rgba(20, 184, 166, 0.06), transparent),
+            radial-gradient(ellipse 400px 300px at 20% 70%, rgba(6, 182, 212, 0.04), transparent)
+          `,
+        }}
+      />
+
+      {/* Divider with transition halo */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] max-w-[600px] h-px bg-gradient-to-r from-transparent via-border-default to-transparent" />
+      <div className="absolute -top-[80px] left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-accent/[0.04] rounded-full blur-[80px] pointer-events-none" aria-hidden="true" />
 
       <div className="max-w-[1100px] mx-auto px-6">
         <motion.div

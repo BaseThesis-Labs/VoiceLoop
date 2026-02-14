@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Menu, X } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -11,11 +12,14 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  const location = useLocation();
+  const isHome = location.pathname === '/';
+
   const links = [
-    { label: 'Features', href: '#features' },
-    { label: 'Code', href: '#code' },
+    { label: 'Features', href: isHome ? '#features' : '/#features' },
+    { label: 'Code', href: isHome ? '#code' : '/#code' },
+    { label: 'Blog', href: '/blog' },
     { label: 'Docs', href: '#' },
-    { label: 'Pricing', href: '#' },
   ];
 
   return (
@@ -27,7 +31,7 @@ export default function Navbar() {
       }`}
     >
       <div className="max-w-[1100px] mx-auto px-6 flex items-center justify-between h-16">
-        <a href="#" className="flex items-center gap-2.5">
+        <Link to="/" className="flex items-center gap-2.5">
           <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
             <defs>
               <linearGradient id="vlg" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
@@ -43,18 +47,28 @@ export default function Navbar() {
           <span className="text-[15px] font-semibold text-text-primary tracking-tight font-[family-name:var(--font-sans)]">
             VoiceLoop
           </span>
-        </a>
+        </Link>
 
         <div className="hidden md:flex items-center gap-7">
-          {links.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              className="text-[13px] font-medium text-text-body hover:text-text-primary transition-colors"
-            >
-              {link.label}
-            </a>
-          ))}
+          {links.map((link) =>
+            link.href.startsWith('/') && !link.href.startsWith('/#') ? (
+              <Link
+                key={link.label}
+                to={link.href}
+                className="text-[13px] font-medium text-text-body hover:text-text-primary transition-colors"
+              >
+                {link.label}
+              </Link>
+            ) : (
+              <a
+                key={link.label}
+                href={link.href}
+                className="text-[13px] font-medium text-text-body hover:text-text-primary transition-colors"
+              >
+                {link.label}
+              </a>
+            )
+          )}
         </div>
 
         <div className="hidden md:flex items-center gap-4">
@@ -79,16 +93,27 @@ export default function Navbar() {
 
       {mobileOpen && (
         <div className="md:hidden max-w-[1100px] mx-auto px-6 pb-6 pt-2 space-y-1 border-t border-border-default bg-bg-primary/95 backdrop-blur-xl">
-          {links.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              className="block text-sm text-text-body hover:text-text-primary py-2.5"
-              onClick={() => setMobileOpen(false)}
-            >
-              {link.label}
-            </a>
-          ))}
+          {links.map((link) =>
+            link.href.startsWith('/') && !link.href.startsWith('/#') ? (
+              <Link
+                key={link.label}
+                to={link.href}
+                className="block text-sm text-text-body hover:text-text-primary py-2.5"
+                onClick={() => setMobileOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ) : (
+              <a
+                key={link.label}
+                href={link.href}
+                className="block text-sm text-text-body hover:text-text-primary py-2.5"
+                onClick={() => setMobileOpen(false)}
+              >
+                {link.label}
+              </a>
+            )
+          )}
           <a
             href="#"
             className="block w-full text-center px-4 py-2.5 mt-3 text-sm font-semibold text-white bg-gradient-to-r from-accent to-[#10b981] rounded-lg"

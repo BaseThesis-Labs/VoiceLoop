@@ -19,8 +19,9 @@ const footerLinks = [
 export default function Footer() {
   return (
     <footer className="relative">
-      {/* Divider */}
+      {/* Divider with transition halo */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] max-w-[600px] h-px bg-gradient-to-r from-transparent via-border-default to-transparent" />
+      <div className="absolute -top-[80px] left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-accent/[0.04] rounded-full blur-[80px] pointer-events-none" aria-hidden="true" />
 
       {/* CTA Section */}
       <div className="max-w-[1100px] mx-auto px-6 py-24">
@@ -30,8 +31,17 @@ export default function Footer() {
           viewport={{ once: true }}
           className="relative overflow-hidden rounded-2xl border border-border-default bg-bg-surface"
         >
-          {/* Decorative gradient */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-gradient-to-b from-accent/[0.06] to-transparent blur-3xl pointer-events-none" />
+          {/* Gradient bloom */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            aria-hidden="true"
+            style={{
+              background: `
+                radial-gradient(ellipse 500px 300px at 50% 0%, rgba(20, 184, 166, 0.08), transparent),
+                radial-gradient(ellipse 300px 200px at 30% 80%, rgba(6, 182, 212, 0.05), transparent)
+              `,
+            }}
+          />
           <div className="relative z-10 text-center px-6 sm:px-16 py-14 sm:py-20">
             <h2 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl lg:text-4xl font-normal text-text-primary tracking-[-0.01em] mb-4">
               Start building better Voice AI today

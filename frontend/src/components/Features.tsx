@@ -548,8 +548,32 @@ export default function Features() {
       {/* Shared SVG defs for feature visuals */}
       <FeatureDefs />
 
-      {/* Divider */}
+      {/* Gradient mesh atmosphere */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        aria-hidden="true"
+        style={{
+          background: `
+            radial-gradient(ellipse 600px 400px at 20% 25%, rgba(20, 184, 166, 0.08), transparent),
+            radial-gradient(ellipse 500px 350px at 75% 55%, rgba(6, 182, 212, 0.06), transparent),
+            radial-gradient(ellipse 450px 300px at 45% 85%, rgba(52, 211, 153, 0.05), transparent)
+          `,
+        }}
+      />
+      {/* Slow-rotating conic haze behind heading */}
+      <div
+        className="absolute top-[-100px] left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full pointer-events-none opacity-[0.06]"
+        style={{
+          background: 'conic-gradient(from 0deg at 50% 50%, #14b8a6, #34d399, #06b6d4, #14b8a6)',
+          filter: 'blur(100px)',
+          animation: 'spin-slow 60s linear infinite',
+        }}
+        aria-hidden="true"
+      />
+
+      {/* Divider with transition halo */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] max-w-[600px] h-px bg-gradient-to-r from-transparent via-border-default to-transparent" />
+      <div className="absolute -top-[80px] left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-accent/[0.04] rounded-full blur-[80px] pointer-events-none" aria-hidden="true" />
 
       <div className="max-w-[1100px] mx-auto px-6">
         <motion.div

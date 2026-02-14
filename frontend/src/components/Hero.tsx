@@ -1,141 +1,22 @@
 import { motion } from 'framer-motion';
 import { ArrowRight, BookOpen } from 'lucide-react';
-
-/**
- * Dithered Sonic Field — hero visual asset.
- * Adapted to a taller aspect ratio for side-by-side layout.
- */
-function SonicField() {
-  const barCount = 40;
-  const bars = Array.from({ length: barCount }, (_, i) => {
-    const normalized = i / (barCount - 1);
-    const centered = Math.abs(normalized - 0.5) * 2;
-    const height = Math.pow(1 - centered, 1.5) * 100;
-    return { height: Math.max(8, height), delay: i * 0.06 };
-  });
-
-  const vw = 500;
-  const vh = 420;
-  const cx = vw / 2;
-  const cy = vh / 2;
-
-  return (
-    <div className="relative w-full h-full min-h-[380px]" aria-hidden="true">
-      {/* SVG filter definitions */}
-      <svg className="absolute w-0 h-0" aria-hidden="true">
-        <defs>
-          <filter id="dither" x="-50%" y="-50%" width="200%" height="200%">
-            <feTurbulence type="fractalNoise" baseFrequency="1.8" numOctaves="1" seed="3" result="noise" />
-            <feComponentTransfer in="noise" result="threshold">
-              <feFuncA type="discrete" tableValues="0 1" />
-            </feComponentTransfer>
-            <feComposite operator="in" in="SourceGraphic" in2="threshold" />
-          </filter>
-          <radialGradient id="core-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.35" />
-            <stop offset="50%" stopColor="#34d399" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-      </svg>
-
-      {/* Layer 1: Drifting gradient blobs */}
-      <div className="absolute inset-0">
-        <div
-          className="absolute top-[10%] left-[15%] w-[280px] h-[280px] rounded-full bg-accent/20 blur-[100px]"
-          style={{ animation: 'drift-1 10s ease-in-out infinite' }}
-        />
-        <div
-          className="absolute top-[40%] right-[10%] w-[240px] h-[240px] rounded-full bg-[#34d399]/15 blur-[90px]"
-          style={{ animation: 'drift-2 13s ease-in-out infinite' }}
-        />
-        <div
-          className="absolute bottom-[10%] left-[30%] w-[200px] h-[200px] rounded-full bg-[#06b6d4]/10 blur-[80px]"
-          style={{ animation: 'drift-3 16s ease-in-out infinite' }}
-        />
-      </div>
-
-      {/* Layer 2: Dithered gradient mesh */}
-      <div className="absolute inset-0" style={{ filter: 'url(#dither)' }}>
-        <div
-          className="absolute top-[5%] left-[10%] w-[300px] h-[300px] rounded-full bg-accent/50"
-          style={{ animation: 'drift-1 10s ease-in-out infinite' }}
-        />
-        <div
-          className="absolute top-[35%] right-[5%] w-[260px] h-[260px] rounded-full bg-[#34d399]/40"
-          style={{ animation: 'drift-2 13s ease-in-out infinite' }}
-        />
-        <div
-          className="absolute bottom-[5%] left-[25%] w-[220px] h-[220px] rounded-full bg-[#06b6d4]/35"
-          style={{ animation: 'drift-3 16s ease-in-out infinite' }}
-        />
-      </div>
-
-      {/* Layer 3: Concentric sound rings */}
-      <svg className="absolute inset-0 w-full h-full" viewBox={`0 0 ${vw} ${vh}`}>
-        {[1, 2, 3].map((i) => (
-          <circle
-            key={i}
-            cx={cx}
-            cy={cy}
-            r={50 + i * 40}
-            fill="none"
-            stroke="#14b8a6"
-            strokeWidth="0.5"
-            strokeDasharray="3 6"
-            opacity={0.2 - i * 0.04}
-            style={{
-              transformOrigin: `${cx}px ${cy}px`,
-              animation: `ring-pulse ${4 + i * 1.5}s ease-out infinite`,
-              animationDelay: `${i * 0.8}s`,
-            }}
-          />
-        ))}
-        {[1, 2, 3, 4, 5].map((i) => (
-          <circle
-            key={`s-${i}`}
-            cx={cx}
-            cy={cy}
-            r={25 + i * 30}
-            fill="none"
-            stroke="#14b8a6"
-            strokeWidth="0.3"
-            opacity={0.06}
-          />
-        ))}
-      </svg>
-
-      {/* Layer 4: Frequency bars */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="flex items-end gap-[2px] h-[110px]">
-          {bars.map((bar, i) => (
-            <div
-              key={i}
-              className="w-[3px] rounded-full bg-gradient-to-t from-accent/60 via-[#34d399]/50 to-[#06b6d4]/30 origin-bottom"
-              style={{
-                height: `${bar.height}%`,
-                animation: `freq-bar ${1.8 + Math.random() * 1.2}s ease-in-out infinite`,
-                animationDelay: `${bar.delay}s`,
-              }}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Layer 5: Central core glow */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${vw} ${vh}`}>
-        <circle cx={cx} cy={cy} r="50" fill="url(#core-glow)" />
-      </svg>
-    </div>
-  );
-}
+import ParticleWaveField from './ParticleWaveField';
 
 export default function Hero() {
   return (
     <section className="relative overflow-hidden">
-      {/* Background atmosphere */}
+      {/* Background atmosphere — gradient mesh */}
       <div className="absolute inset-0 dot-grid" />
-      <div className="absolute top-[20%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-accent/[0.025] rounded-full blur-[150px] pointer-events-none" />
+      <div
+        className="absolute inset-0 pointer-events-none"
+        aria-hidden="true"
+        style={{
+          background: `
+            radial-gradient(ellipse 700px 500px at 30% 25%, rgba(20, 184, 166, 0.07), transparent),
+            radial-gradient(ellipse 500px 400px at 75% 60%, rgba(6, 182, 212, 0.05), transparent)
+          `,
+        }}
+      />
 
       <div className="relative max-w-[1100px] mx-auto px-6 pt-32 pb-16">
         {/* Two-column layout: text left, asset right */}
@@ -212,7 +93,7 @@ export default function Hero() {
             transition={{ duration: 0.8, delay: 0.5 }}
             className="flex-1 w-full lg:max-w-[520px]"
           >
-            <SonicField />
+            <ParticleWaveField />
           </motion.div>
         </div>
 
