@@ -1,7 +1,13 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import AnnouncementBar from './components/AnnouncementBar';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
-import Features from './components/Features';
+import InteractiveDemo from './components/InteractiveDemo';
+import IntentApiSection from './components/IntentApiSection';
+import DecisionIntelligenceSection from './components/DecisionIntelligenceSection';
+import EvalsArenaSection from './components/EvalsArenaSection';
+import TextToAgentSection from './components/TextToAgentSection';
+import SocialProof from './components/SocialProof';
 import CodeSection from './components/CodeSection';
 import Footer from './components/Footer';
 import BlogPage from './components/BlogPage';
@@ -10,9 +16,15 @@ import BlogPostPage from './components/BlogPostPage';
 function HomePage() {
   return (
     <div className="noise-overlay min-h-screen bg-bg-primary text-text-primary">
+      <AnnouncementBar />
       <Navbar />
       <Hero />
-      <Features />
+      <InteractiveDemo />
+      <IntentApiSection />
+      <DecisionIntelligenceSection />
+      <EvalsArenaSection />
+      <TextToAgentSection />
+      <SocialProof />
       <CodeSection />
       <Footer />
     </div>

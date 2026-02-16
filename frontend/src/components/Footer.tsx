@@ -19,80 +19,64 @@ const footerLinks = [
 export default function Footer() {
   return (
     <footer className="relative">
-      {/* Divider with transition halo */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] max-w-[600px] h-px bg-gradient-to-r from-transparent via-border-default to-transparent" />
-      <div className="absolute -top-[80px] left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-accent/[0.04] rounded-full blur-[80px] pointer-events-none" aria-hidden="true" />
-
-      {/* CTA Section */}
-      <div className="max-w-[1100px] mx-auto px-6 py-24">
+      {/* CTA Card Section */}
+      <div className="max-w-[1280px] mx-auto px-6 py-24">
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="relative overflow-hidden rounded-2xl border border-border-default bg-bg-surface"
+          transition={{ duration: 0.6, ease: 'easeOut' }}
+          className="rounded-2xl border border-border-default bg-bg-surface overflow-hidden relative"
         >
-          {/* Gradient bloom */}
+          {/* Aurora gradient background */}
           <div
             className="absolute inset-0 pointer-events-none"
             aria-hidden="true"
             style={{
               background: `
-                radial-gradient(ellipse 500px 300px at 50% 0%, rgba(20, 184, 166, 0.08), transparent),
-                radial-gradient(ellipse 300px 200px at 30% 80%, rgba(6, 182, 212, 0.05), transparent)
+                radial-gradient(ellipse 600px 350px at 50% 0%, rgba(45, 212, 168, 0.08), transparent),
+                radial-gradient(ellipse 400px 250px at 30% 80%, rgba(6, 182, 212, 0.05), transparent)
               `,
             }}
           />
-          <div className="relative z-10 text-center px-6 sm:px-16 py-14 sm:py-20">
-            <h2 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl lg:text-4xl font-normal text-text-primary tracking-[-0.01em] mb-4">
-              Start building better Voice AI today
+
+          {/* Content */}
+          <div className="relative z-10 text-center px-8 sm:px-16 py-16 sm:py-24">
+            <h2 className="font-[family-name:var(--font-display)] text-3xl lg:text-4xl text-text-primary tracking-[-0.01em] mb-4">
+              Start building intelligent voice agents
             </h2>
-            <p className="text-[15px] text-text-body mb-8 max-w-md mx-auto">
+            <p className="text-[16px] text-text-body mb-10 max-w-md mx-auto">
               Free to start. Scale as you grow. No credit card required.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <div className="flex flex-row items-center justify-center gap-4">
               <a
                 href="#"
-                className="group inline-flex items-center gap-2 px-7 py-3.5 text-sm font-semibold text-white bg-gradient-to-r from-accent to-[#10b981] rounded-lg hover:shadow-[0_0_24px_rgba(20,184,166,0.25)] transition-all duration-300"
+                className="px-7 py-3.5 bg-accent text-bg-primary rounded-lg font-semibold text-sm hover:shadow-[0_0_24px_rgba(45,212,168,0.2)] transition"
               >
-                Get Started Free
-                <ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+                Start for Free
               </a>
               <a
                 href="#"
-                className="inline-flex items-center px-6 py-3.5 text-sm font-medium text-text-body border border-border-default rounded-lg hover:text-text-primary hover:border-border-strong transition-all duration-300"
+                className="px-7 py-3.5 border border-border-strong text-text-body rounded-lg font-medium text-sm hover:text-text-primary hover:border-text-faint transition"
               >
-                Talk to us
+                Talk to Sales
               </a>
             </div>
           </div>
         </motion.div>
       </div>
 
-      {/* Footer links */}
-      <div className="max-w-[1100px] mx-auto px-6 pb-16">
-        <div className="border-t border-border-default pt-10">
+      {/* Footer Links Section */}
+      <div className="max-w-[1280px] mx-auto px-6 pb-16">
+        <div className="border-t border-border-default pt-12">
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-8">
-            {/* Brand */}
-            <div className="col-span-2 sm:col-span-4 lg:col-span-2 mb-4 lg:mb-0">
-              <div className="flex items-center gap-2.5 mb-4">
-                <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-                  <defs>
-                    <linearGradient id="vlg-f" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
-                      <stop stopColor="#14b8a6" />
-                      <stop offset="1" stopColor="#34d399" />
-                    </linearGradient>
-                  </defs>
-                  <circle cx="16" cy="16" r="13" stroke="url(#vlg-f)" strokeWidth="2.2" fill="none" strokeDasharray="69 13" strokeLinecap="round" transform="rotate(-60 16 16)" />
-                  <rect x="11.5" y="12.5" width="2.2" height="7" rx="1.1" fill="url(#vlg-f)" />
-                  <rect x="14.9" y="10" width="2.2" height="12" rx="1.1" fill="url(#vlg-f)" />
-                  <rect x="18.3" y="12.5" width="2.2" height="7" rx="1.1" fill="url(#vlg-f)" />
-                </svg>
-                <span className="text-[15px] font-semibold text-text-primary font-[family-name:var(--font-sans)]">
-                  VoiceLoop
-                </span>
-              </div>
+            {/* Column 1: Brand */}
+            <div className="col-span-2">
+              <p className="text-[15px] font-semibold text-text-primary mb-4">
+                VoiceLoop
+              </p>
               <p className="text-[13px] text-text-body leading-relaxed mb-5 max-w-[260px]">
-                The operating system for Voice AI. Evals, observability, and self-evolving agents.
+                The intelligence layer for production voice AI.
               </p>
               <div className="flex items-center gap-3">
                 <a href="#" className="text-text-faint hover:text-text-body transition-colors">
@@ -101,6 +85,18 @@ export default function Footer() {
                 <a href="#" className="text-text-faint hover:text-text-body transition-colors">
                   <Twitter size={16} />
                 </a>
+              </div>
+
+              {/* Newsletter input */}
+              <div className="mt-5 flex flex-row">
+                <input
+                  type="email"
+                  placeholder="Your email"
+                  className="bg-bg-hover border border-border-default rounded-l-lg px-3 py-2 text-[13px] text-text-primary placeholder-text-faint w-48 focus:outline-none focus:border-border-strong"
+                />
+                <button className="bg-accent text-bg-primary px-3 py-2 rounded-r-lg text-[13px] font-medium hover:bg-accent/90 transition">
+                  <ArrowRight size={14} />
+                </button>
               </div>
             </div>
 
@@ -123,9 +119,10 @@ export default function Footer() {
             ))}
           </div>
 
+          {/* Bottom bar */}
           <div className="mt-10 pt-8 border-t border-border-default flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-[12px] text-text-faint">
-              &copy; {new Date().getFullYear()} VoiceLoop. All rights reserved.
+              &copy; 2026 VoiceLoop. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
               <a href="#" className="text-[12px] text-text-faint hover:text-text-body transition-colors">
