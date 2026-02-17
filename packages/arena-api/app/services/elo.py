@@ -2,13 +2,15 @@ from app.config import settings
 
 
 def compute_composite_score(metrics: dict) -> float:
-    semascore = metrics.get("semascore", 0)
+    semascore = metrics.get("semascore") or 0
     if semascore < 0:
         semascore = 0
-    wer = metrics.get("wer_score", 1)
-    prosody = metrics.get("overall_prosody_score", 0)
-    quality = metrics.get("speech_quality_score", 0)
-    latency = metrics.get("average_latency_ms", 1000)
+    wer = metrics.get("wer_score") or 1
+    prosody = metrics.get("prosody_score") or 0
+    # UTMOS is 1-5 scale; normalize to 0-1
+    utmos = metrics.get("utmos")
+    quality = (utmos - 1) / 4 if utmos is not None else 0
+    latency = metrics.get("e2e_latency_ms") or 1000
     norm_latency = min(latency / 1000, 1.0)
 
     return (

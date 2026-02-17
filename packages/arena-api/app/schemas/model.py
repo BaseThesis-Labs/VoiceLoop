@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 
 
@@ -24,7 +25,7 @@ class ModelResponse(BaseModel):
     elo_rating: float
     total_battles: int
     win_rate: float
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}

@@ -35,14 +35,14 @@ async def submit_evaluation(eval_id: str) -> None:
         eval_record.status = "running"
         await db.commit()
         audio_path = eval_record.audio_path
-        transcript_ref = eval_record.transcript_ref
+        ground_truth = eval_record.transcript_ref
 
     try:
         metrics_dict = await loop.run_in_executor(
             executor,
             run_evaluation,
             audio_path,
-            transcript_ref,
+            ground_truth,
             settings.hf_token,
             settings.enable_diarization,
             settings.default_num_speakers,

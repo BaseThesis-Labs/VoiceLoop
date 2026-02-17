@@ -1,21 +1,20 @@
-import dataclasses
-from voice_evals import VoiceEvaluationPipeline
-
-
 def run_evaluation(
     audio_path: str,
-    transcript_path: str | None,
+    ground_truth: str | None,
     hf_token: str,
     enable_diarization: bool,
     num_speakers: int | None,
 ) -> dict:
-    """Runs VoiceEvaluationPipeline in a worker process. Returns serializable dict."""
-    pipeline = VoiceEvaluationPipeline(
+    """Runs VoiceEvalPipeline in a worker process. Returns serializable dict."""
+    from voice_evals import VoiceEvalPipeline, EvalConfig
+
+    config = EvalConfig(device="auto")
+    pipeline = VoiceEvalPipeline(config=config)
+    result = pipeline.evaluate(
         audio_path=audio_path,
-        transcript_path=transcript_path,
-        hf_token=hf_token or None,
+        ground_truth=ground_truth,
         enable_diarization=enable_diarization,
+        hf_token=hf_token or None,
         num_speakers=num_speakers,
     )
-    metrics = pipeline.evaluate()
-    return dataclasses.asdict(metrics)
+    return result.to_dict()

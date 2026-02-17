@@ -25,8 +25,8 @@ async def get_leaderboard(
             select(
                 func.avg(Evaluation.metrics_json["wer_score"].as_float()).label("avg_wer"),
                 func.avg(Evaluation.metrics_json["semascore"].as_float()).label("avg_semascore"),
-                func.avg(Evaluation.metrics_json["overall_prosody_score"].as_float()).label("avg_prosody"),
-                func.avg(Evaluation.metrics_json["speech_quality_score"].as_float()).label("avg_quality"),
+                func.avg(Evaluation.metrics_json["prosody_score"].as_float()).label("avg_prosody"),
+                func.avg(Evaluation.metrics_json["utmos"].as_float()).label("avg_quality"),
             ).where(
                 Evaluation.model_id == model.id,
                 Evaluation.status == "completed",

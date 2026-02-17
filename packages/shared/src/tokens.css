@@ -1,0 +1,42 @@
+/* VoiceLoop Design Tokens — shared across all products */
+
+@theme {
+  /* Backgrounds — blue-tinted blacks for depth */
+  --color-bg-primary: #08090D;
+  --color-bg-surface: #0F1118;
+  --color-bg-surface-header: #0B0D14;
+  --color-bg-hover: #161822;
+
+  /* Borders */
+  --color-border-default: #1C1E2E;
+  --color-border-strong: #282A3A;
+
+  /* Text — 3 levels */
+  --color-text-primary: #EEEEF3;
+  --color-text-body: #888899;
+  --color-text-faint: #4E4E5E;
+
+  /* Accent — warm teal */
+  --color-accent: #2DD4A8;
+  --color-accent-dim: #1a9e7e;
+
+  /* Code colors */
+  --color-code-keyword: #5eead4;
+  --color-code-string: #34d399;
+
+  /* Latency spectrum */
+  --color-latency-fast: #22c55e;
+  --color-latency-ok: #eab308;
+  --color-latency-slow: #f97316;
+  --color-latency-bad: #ef4444;
+
+  /* Vote colors */
+  --color-vote-a: #6366f1;
+  --color-vote-b: #f59e0b;
+  --color-vote-tie: #888899;
+
+  /* Fonts */
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}

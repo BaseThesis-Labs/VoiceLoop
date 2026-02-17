@@ -264,6 +264,21 @@ export default function EvalsArenaSection() {
             >
               <DetailBullets items={details} />
             </motion.div>
+
+            <motion.a
+              href="/arena/"
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4, delay: 0.36 }}
+              className="mt-10 inline-flex items-center gap-2.5 px-6 py-3 text-sm font-semibold rounded-lg bg-accent text-bg-primary hover:shadow-[0_0_30px_rgba(45,212,168,0.3)] transition-all"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-bg-primary animate-[pulse-live_2s_ease-in-out_infinite]" />
+              Enter the Arena
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </motion.a>
           </div>
 
           {/* Visual — right side */}
