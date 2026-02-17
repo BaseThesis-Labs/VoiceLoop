@@ -2,44 +2,115 @@ import { useState, useEffect } from 'react';
 import { Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
+const navLinks = [
+  { label: 'Product', hash: '#features' },
+  { label: 'Solutions', hash: '#demo' },
+  { label: 'Voice Arena', href: '/arena/' },
+  { label: 'Blog', to: '/blog' },
+  { label: 'Pricing', hash: '#pricing' },
+  { label: 'Docs', href: '#' },
+];
+
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 10);
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
   const location = useLocation();
   const isHome = location.pathname === '/';
 
-  const links = [
-    { label: 'Features', href: isHome ? '#features' : '/#features' },
-    { label: 'Code', href: isHome ? '#code' : '/#code' },
-    { label: 'Blog', href: '/blog' },
-    { label: 'Docs', href: '#' },
-  ];
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
+
+  function resolveHref(link: (typeof navLinks)[number]): string {
+    if (link.to) return link.to;
+    if (link.hash) return isHome ? link.hash : `/${link.hash}`;
+    return link.href ?? '#';
+  }
+
+  function renderNavLink(
+    link: (typeof navLinks)[number],
+    className: string,
+    onClick?: () => void,
+  ) {
+    const href = resolveHref(link);
+    const isRouterLink = href.startsWith('/') && !href.startsWith('/#');
+
+    if (isRouterLink) {
+      return (
+        <Link
+          key={link.label}
+          to={href}
+          className={className}
+          onClick={onClick}
+        >
+          {link.label}
+        </Link>
+      );
+    }
+
+    return (
+      <a
+        key={link.label}
+        href={href}
+        className={className}
+        onClick={onClick}
+      >
+        {link.label}
+      </a>
+    );
+  }
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      className={`sticky top-0 z-[60] h-16 transition-all duration-300 ${
         scrolled
-          ? 'bg-bg-primary/80 backdrop-blur-xl border-b border-border-default'
-          : 'bg-transparent'
+          ? 'bg-bg-primary/80 backdrop-blur-xl border-b border-border-default shadow-[0_1px_12px_rgba(0,0,0,0.3)]'
+          : 'bg-bg-primary/50 backdrop-blur-md border-b border-white/[0.04]'
       }`}
     >
-      <div className="max-w-[1100px] mx-auto px-6 flex items-center justify-between h-16">
-        <Link to="/" className="flex items-center gap-2.5">
+      <div className="max-w-[1280px] mx-auto px-6 h-full flex items-center justify-between">
+        {/* ── Logo + Wordmark ── */}
+        <Link to="/" className="flex items-center gap-2.5 shrink-0">
           <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
             <defs>
-              <linearGradient id="vlg" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#14b8a6" />
+              <linearGradient
+                id="vlg"
+                x1="2"
+                y1="2"
+                x2="30"
+                y2="30"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop stopColor="#2DD4A8" />
                 <stop offset="1" stopColor="#34d399" />
               </linearGradient>
             </defs>
-            <circle cx="16" cy="16" r="13" stroke="url(#vlg)" strokeWidth="2.2" fill="none" strokeDasharray="69 13" strokeLinecap="round" transform="rotate(-60 16 16)" />
+            <circle
+              cx="16"
+              cy="16"
+              r="13"
+              stroke="url(#vlg)"
+              strokeWidth="2.2"
+              fill="none"
+              strokeDasharray="69 13"
+              strokeLinecap="round"
+              transform="rotate(-60 16 16)"
+            />
             <rect x="11.5" y="12.5" width="2.2" height="7" rx="1.1" fill="url(#vlg)" />
             <rect x="14.9" y="10" width="2.2" height="12" rx="1.1" fill="url(#vlg)" />
             <rect x="18.3" y="12.5" width="2.2" height="7" rx="1.1" fill="url(#vlg)" />
@@ -49,77 +120,82 @@ export default function Navbar() {
           </span>
         </Link>
 
+        {/* ── Center Nav Links (desktop) ── */}
         <div className="hidden md:flex items-center gap-7">
-          {links.map((link) =>
-            link.href.startsWith('/') && !link.href.startsWith('/#') ? (
-              <Link
-                key={link.label}
-                to={link.href}
-                className="text-[13px] font-medium text-text-body hover:text-text-primary transition-colors"
-              >
-                {link.label}
-              </Link>
-            ) : (
-              <a
-                key={link.label}
-                href={link.href}
-                className="text-[13px] font-medium text-text-body hover:text-text-primary transition-colors"
-              >
-                {link.label}
-              </a>
-            )
+          {navLinks.map((link) =>
+            renderNavLink(
+              link,
+              'text-[13px] font-medium text-text-body hover:text-text-primary transition-colors',
+            ),
           )}
         </div>
 
-        <div className="hidden md:flex items-center gap-4">
-          <a href="#" className="text-[13px] text-text-body hover:text-text-primary transition-colors">
+        {/* ── Right Actions (desktop) ── */}
+        <div className="hidden md:flex items-center gap-3 shrink-0">
+          <a
+            href="#"
+            className="text-[13px] font-medium text-text-body hover:text-text-primary transition-colors"
+          >
+            Contact Sales
+          </a>
+          <a
+            href="#"
+            className="inline-flex items-center px-4 py-2 text-[13px] font-medium text-text-body border border-border-strong rounded-lg hover:text-text-primary hover:border-text-faint transition-all"
+          >
             Sign in
           </a>
           <a
             href="#"
-            className="inline-flex items-center px-4 py-2 text-[13px] font-semibold text-white bg-gradient-to-r from-accent to-[#10b981] rounded-lg hover:shadow-[0_0_16px_rgba(20,184,166,0.2)] transition-all duration-300"
+            className="inline-flex items-center px-4 py-2 text-[13px] font-semibold text-accent border border-accent rounded-lg hover:bg-accent/10 transition-all"
           >
-            Get Started
+            Start for Free
           </a>
         </div>
 
+        {/* ── Mobile Hamburger ── */}
         <button
-          onClick={() => setMobileOpen(!mobileOpen)}
-          className="md:hidden p-2 text-text-body"
+          type="button"
+          onClick={() => setMobileOpen((prev) => !prev)}
+          className="md:hidden p-2 text-text-body hover:text-text-primary transition-colors"
+          aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
         >
           {mobileOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
 
+      {/* ── Mobile Menu ── */}
       {mobileOpen && (
-        <div className="md:hidden max-w-[1100px] mx-auto px-6 pb-6 pt-2 space-y-1 border-t border-border-default bg-bg-primary/95 backdrop-blur-xl">
-          {links.map((link) =>
-            link.href.startsWith('/') && !link.href.startsWith('/#') ? (
-              <Link
-                key={link.label}
-                to={link.href}
-                className="block text-sm text-text-body hover:text-text-primary py-2.5"
-                onClick={() => setMobileOpen(false)}
-              >
-                {link.label}
-              </Link>
-            ) : (
+        <div className="md:hidden fixed inset-x-0 top-16 bottom-0 bg-bg-primary/95 backdrop-blur-xl border-t border-border-default overflow-y-auto">
+          <div className="max-w-[1280px] mx-auto px-6 py-6 flex flex-col gap-1">
+            {navLinks.map((link) =>
+              renderNavLink(
+                link,
+                'block text-sm font-medium text-text-body hover:text-text-primary py-3 transition-colors',
+                () => setMobileOpen(false),
+              ),
+            )}
+
+            <div className="mt-4 pt-4 border-t border-border-default flex flex-col gap-3">
               <a
-                key={link.label}
-                href={link.href}
-                className="block text-sm text-text-body hover:text-text-primary py-2.5"
-                onClick={() => setMobileOpen(false)}
+                href="#"
+                className="text-sm font-medium text-text-body hover:text-text-primary transition-colors py-2"
               >
-                {link.label}
+                Contact Sales
               </a>
-            )
-          )}
-          <a
-            href="#"
-            className="block w-full text-center px-4 py-2.5 mt-3 text-sm font-semibold text-white bg-gradient-to-r from-accent to-[#10b981] rounded-lg"
-          >
-            Get Started
-          </a>
+              <a
+                href="#"
+                className="text-center text-sm font-medium text-text-body border border-border-strong rounded-lg px-4 py-2.5 hover:text-text-primary hover:border-text-faint transition-all"
+              >
+                Sign in
+              </a>
+              <a
+                href="#"
+                className="block w-full text-center text-sm font-semibold text-accent border border-accent rounded-lg px-4 py-2.5 hover:bg-accent/10 transition-all"
+              >
+                Start for Free
+              </a>
+            </div>
+          </div>
         </div>
       )}
     </nav>

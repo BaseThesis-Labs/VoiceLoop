@@ -1,116 +1,86 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Copy, Check, Terminal } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 
 const tabs = [
   {
     label: 'Python',
-    code: `from voiceloop import VoiceLoop, Eval
+    lang: 'python',
+    code: `from voiceloop import VoiceLoop, IntentAPI
 
 client = VoiceLoop(api_key="vl_...")
+intent = IntentAPI()
 
-# Define an eval for your voice agent
-eval = Eval(
-    name="scheduling-accuracy",
-    criteria=[
-        "confirms_date_and_time",
-        "repeats_back_details",
-        "handles_conflicts_gracefully",
-    ],
-    threshold=0.9,
+# Compute the intent vector from audio + transcript
+vector = intent.compute(
+    audio=audio_bytes,
+    transcript="I guess we could try Bali..."
 )
 
-# Run eval against your agent
-result = client.eval.run(
-    agent_id="agent_scheduling_v3",
-    eval=eval,
-    dataset="production_calls_last_7d",
+# Post a turn — get a decision
+directive = client.turns.create(
+    call_id="call_abc123",
+    intent_vector=vector,
+    transcript="I guess we could try Bali..."
 )
 
-print(f"Score: {result.score}")
-print(f"Pass: {result.passed}")`,
+print(directive.strategy)      # "empathetic_acknowledgment"
+print(directive.active_tools)  # ["search_flights", "apply_discount"]
+print(directive.reasoning)     # "Frustration rising..."`,
   },
   {
     label: 'TypeScript',
-    code: `import { VoiceLoop } from "@voiceloop/sdk";
+    lang: 'typescript',
+    code: `import { VoiceLoop, IntentAPI } from "@voiceloop/sdk";
 
-const client = new VoiceLoop({
-  apiKey: "vl_...",
+const client = new VoiceLoop({ apiKey: "vl_..." });
+const intent = new IntentAPI();
+
+// Compute the intent vector
+const vector = await intent.compute({
+  audio: audioBuffer,
+  transcript: "I guess we could try Bali..."
 });
 
-// Observe every agent conversation
-const trace = await client.traces.create({
-  agentId: "agent_scheduling_v3",
-  sessionId: session.id,
+// Post a turn — get a decision
+const directive = await client.turns.create({
+  callId: "call_abc123",
+  intentVector: vector,
+  transcript: "I guess we could try Bali..."
 });
 
-// Auto-optimize prompts from eval feedback
-await client.prompts.optimize({
-  agentId: "agent_scheduling_v3",
-  strategy: "gradient",
-  evalResults: trace.evals,
-  autoPromote: true,
-});
-
-console.log("Prompt optimized and promoted!");`,
+console.log(directive.strategy);     // "empathetic_acknowledgment"
+console.log(directive.activeTools);  // ["search_flights", "apply_discount"]`,
   },
   {
     label: 'cURL',
-    code: `curl -X POST https://api.voiceloop.dev/v1/evals/run \\
+    lang: 'bash',
+    code: `curl -X POST https://api.voiceloop.dev/v1/calls/call_abc123/turns \\
   -H "Authorization: Bearer vl_..." \\
   -H "Content-Type: application/json" \\
   -d '{
-    "agent_id": "agent_scheduling_v3",
-    "eval_name": "scheduling-accuracy",
-    "dataset": "production_calls_last_7d"
-  }'
-
-# Response
-# {
-#   "score": 0.942,
-#   "passed": true,
-#   "criteria_scores": {
-#     "confirms_date_and_time": 0.97,
-#     "repeats_back_details": 0.91,
-#     "handles_conflicts": 0.95
-#   }
-# }`,
+    "intent_vector": {
+      "hedging": 0.72,
+      "requesting": 0.82,
+      "frustrated": 0.45
+    },
+    "transcript": "I guess we could try Bali..."
+  }'`,
   },
 ];
 
-const terminalLines = [
-  { text: '$ voiceloop eval run --agent scheduling_v3', type: 'command' as const },
-  { text: '', type: 'blank' as const },
-  { text: '  Running eval: scheduling-accuracy', type: 'info' as const },
-  { text: '  Dataset: production_calls_last_7d (1,247 calls)', type: 'info' as const },
-  { text: '', type: 'blank' as const },
-  { text: '  confirms_date_and_time    ████████████████████  97%', type: 'result' as const },
-  { text: '  repeats_back_details      █████████████████░░░  91%', type: 'result' as const },
-  { text: '  handles_conflicts         ███████████████████░  95%', type: 'result' as const },
-  { text: '', type: 'blank' as const },
-  { text: '  Overall Score: 94.2%  ✓ PASSED', type: 'success' as const },
-  { text: '', type: 'blank' as const },
-  { text: '  → Prompt v3.2 auto-optimized → v3.3', type: 'optimize' as const },
-  { text: '  → Latency improved: 340ms → 285ms (-16.2%)', type: 'optimize' as const },
+const stats = [
+  '< 5 min setup',
+  '3 SDKs',
+  '99.9% uptime',
 ];
 
-function getLineColor(type: string) {
-  switch (type) {
-    case 'command': return 'text-[#34d399]';
-    case 'info': return 'text-text-body';
-    case 'result': return 'text-code-keyword';
-    case 'success': return 'text-[#34d399] font-semibold';
-    case 'optimize': return 'text-amber-400/80';
-    default: return '';
-  }
-}
-
 function highlightSyntax(line: string, lang: string): string {
-  if (lang === 'Python') {
+  if (lang === 'python') {
     if (/^\s*(from|import|def|class|return|print|if|else|for|in|with|as)\b/.test(line)) return 'keyword';
     if (/^\s*#/.test(line)) return 'comment';
     if (/".*?"/.test(line) || /'.*?'/.test(line)) return 'string';
-  } else if (lang === 'TypeScript') {
+  } else if (lang === 'typescript') {
     if (/^\s*(import|export|const|let|var|await|async|from|new|function)\b/.test(line)) return 'keyword';
     if (/^\s*\/\//.test(line)) return 'comment';
     if (/".*?"/.test(line) || /'.*?'/.test(line)) return 'string';
@@ -142,128 +112,112 @@ export default function CodeSection() {
   };
 
   return (
-    <section id="code" className="relative py-24">
-      {/* Spotlight gradient band */}
+    <section id="code" className="relative py-32 lg:py-40 overflow-hidden">
+      {/* Gradient divider */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] max-w-[600px] h-px bg-gradient-to-r from-transparent via-border-default to-transparent" />
+
+      {/* Background atmosphere */}
       <div
         className="absolute inset-0 pointer-events-none"
         aria-hidden="true"
         style={{
-          background: `
-            radial-gradient(ellipse 900px 350px at 50% 55%, rgba(20, 184, 166, 0.06), transparent),
-            radial-gradient(ellipse 400px 300px at 20% 70%, rgba(6, 182, 212, 0.04), transparent)
-          `,
+          background: 'radial-gradient(ellipse at 50% 50%, rgba(45,212,168,0.04), transparent)',
         }}
       />
 
-      {/* Divider with transition halo */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] max-w-[600px] h-px bg-gradient-to-r from-transparent via-border-default to-transparent" />
-      <div className="absolute -top-[80px] left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-accent/[0.04] rounded-full blur-[80px] pointer-events-none" aria-hidden="true" />
-
-      <div className="max-w-[1100px] mx-auto px-6">
+      <div className="max-w-[1280px] mx-auto px-6">
+        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center max-w-2xl mx-auto mb-14"
+          className="text-center mb-14"
         >
-          <span className="inline-block text-[11px] font-semibold text-accent font-[family-name:var(--font-mono)] uppercase tracking-[0.15em] mb-4">
-            Developer Experience
+          <span className="inline-block text-[11px] font-semibold text-accent font-[family-name:var(--font-mono)] uppercase tracking-[0.15em] mb-5">
+            DEVELOPER EXPERIENCE
           </span>
-          <h2 className="font-[family-name:var(--font-display)] text-3xl sm:text-4xl lg:text-[44px] font-normal text-text-primary tracking-[-0.01em] leading-[1.15] mb-4">
-            Ship in minutes,{' '}
-            <span className="bg-gradient-to-r from-accent to-[#34d399] bg-clip-text text-transparent">
-              not months
-            </span>
+          <h2 className="font-[family-name:var(--font-display)] text-4xl lg:text-[44px] text-text-primary tracking-[-0.02em] leading-[1.1] mb-4">
+            A few lines to production
           </h2>
-          <p className="text-[15px] text-text-body leading-relaxed">
-            A few lines of code to evaluate, observe, and optimize your voice agents.
+          <p className="text-[16px] text-text-body max-w-lg mx-auto">
+            Integrate VoiceLoop&apos;s intent engine and decision intelligence in minutes.
           </p>
         </motion.div>
 
+        {/* Code card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch"
+          transition={{ delay: 0.15 }}
+          className="max-w-[740px] mx-auto rounded-2xl bg-bg-surface border border-border-default dot-border-top hover:border-border-strong transition-colors duration-300"
         >
-          {/* Code editor */}
-          <div className="flex flex-col rounded-2xl overflow-hidden border border-border-default bg-bg-surface hover:border-border-strong transition-colors duration-300">
-            <div className="flex items-center justify-between bg-bg-surface-header px-5 py-3 border-b border-border-default">
-              <div className="flex items-center gap-1">
-                {tabs.map((tab, i) => (
-                  <button
-                    key={tab.label}
-                    onClick={() => setActiveTab(i)}
-                    className={`px-3 py-1.5 text-[12px] font-medium rounded-md transition-all ${
-                      activeTab === i
-                        ? 'bg-bg-hover text-text-primary'
-                        : 'text-text-faint hover:text-text-body'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={handleCopy}
-                className="flex items-center gap-1.5 text-[11px] text-text-faint hover:text-text-body transition-colors font-[family-name:var(--font-mono)]"
-              >
-                {copied ? <Check size={13} className="text-accent" /> : <Copy size={13} />}
-                {copied ? 'Copied' : 'Copy'}
-              </button>
+          {/* Card header */}
+          <div className="flex items-center justify-between bg-bg-surface-header px-5 py-3 border-b border-border-default">
+            <div className="flex items-center gap-1">
+              {tabs.map((tab, i) => (
+                <button
+                  key={tab.label}
+                  onClick={() => setActiveTab(i)}
+                  className={`px-3 py-1.5 text-[12px] font-medium rounded-md transition-all ${
+                    activeTab === i
+                      ? 'bg-bg-hover text-text-primary'
+                      : 'text-text-faint hover:text-text-body'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
-            <div className="flex-1 p-5 overflow-auto">
-              <pre className="text-[13px] font-[family-name:var(--font-mono)] leading-[1.7]">
-                <code>
-                  {tabs[activeTab].code.split('\n').map((line, i) => {
-                    const type = highlightSyntax(line, tabs[activeTab].label);
-                    return (
-                      <div key={i} className="flex">
-                        <span className="text-text-faint/40 select-none w-7 shrink-0 text-right mr-4 text-[12px]">
-                          {i + 1}
-                        </span>
-                        <span className={getHighlightClass(type)}>
-                          {line || '\u00A0'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </code>
-              </pre>
-            </div>
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-1.5 text-[11px] text-text-faint hover:text-text-body transition-colors font-[family-name:var(--font-mono)]"
+            >
+              {copied ? <Check size={13} className="text-accent" /> : <Copy size={13} />}
+              {copied ? 'Copied' : 'Copy'}
+            </button>
           </div>
 
-          {/* Terminal output */}
-          <div className="flex flex-col rounded-2xl overflow-hidden border border-border-default bg-bg-surface hover:border-border-strong transition-colors duration-300">
-            <div className="flex items-center gap-3 bg-bg-surface-header px-5 py-3 border-b border-border-default">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-[#EF4444]/40" />
-                <div className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]/40" />
-                <div className="w-2.5 h-2.5 rounded-full bg-[#22C55E]/40" />
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-text-faint font-[family-name:var(--font-mono)]">
-                <Terminal size={13} />
-                terminal
-              </div>
-            </div>
-            <div className="flex-1 p-5 overflow-auto">
-              <div className="text-[13px] font-[family-name:var(--font-mono)] leading-[1.8]">
-                {terminalLines.map((line, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0 }}
-                    whileInView={{ opacity: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.2 + i * 0.05 }}
-                    className={`${getLineColor(line.type)} ${line.type === 'blank' ? 'h-5' : ''}`}
-                  >
-                    {line.text}
-                  </motion.div>
-                ))}
-              </div>
-            </div>
+          {/* Code content */}
+          <div className="p-6 overflow-auto">
+            <pre className="text-[13px] font-[family-name:var(--font-mono)] leading-[1.7]">
+              <code>
+                {tabs[activeTab].code.split('\n').map((line, i) => {
+                  const type = highlightSyntax(line, tabs[activeTab].lang);
+                  return (
+                    <div key={i} className="flex">
+                      <span className="text-text-faint/30 select-none w-7 shrink-0 text-right mr-4 text-[12px]">
+                        {i + 1}
+                      </span>
+                      <span className={getHighlightClass(type)}>
+                        {line || '\u00A0'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </code>
+            </pre>
           </div>
+        </motion.div>
+
+        {/* Stat callouts */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.3 }}
+          className="flex items-center justify-center gap-8 mt-10"
+        >
+          {stats.map((stat, i) => (
+            <div key={stat} className="flex items-center gap-8">
+              {i > 0 && (
+                <div className="w-1 h-1 rounded-full bg-border-default" />
+              )}
+              <span className="text-[13px] font-[family-name:var(--font-mono)] text-text-faint">
+                {stat}
+              </span>
+            </div>
+          ))}
         </motion.div>
       </div>
     </section>
