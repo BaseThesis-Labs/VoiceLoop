@@ -6,21 +6,18 @@ import { useRef, useEffect } from 'react';
 const VOXEL = 5;
 const GAP = 1;
 const CELL = VOXEL + GAP;
-const W = 520;
-const H = 460;
-const COLS = Math.floor(W / CELL); // 86
-const ROWS = Math.floor(H / CELL); // 76
+const W = 400;
+const H = 300;
+const COLS = Math.floor(W / CELL); // 66
+const ROWS = Math.floor(H / CELL); // 50
 
 // ═══════════════════════════════════════════════════════
 // BIRD SCALE & TRAJECTORY
-// Scale < 1 shrinks the bird. The bird shape is defined
-// in "bird space" and we divide canvas coords by SCALE
-// to map into that space — larger divisor = smaller bird.
 // ═══════════════════════════════════════════════════════
 const SCALE = 0.40;
-const TRAJ_SPEED = 0.00038; // ~16s full cycle base
-const TRAJ_AX = 15; // horizontal amplitude (grid cells)
-const TRAJ_AY = 9; // vertical amplitude
+const TRAJ_SPEED = 0.00038;
+const TRAJ_AX = 12; // horizontal amplitude (grid cells)
+const TRAJ_AY = 7;  // vertical amplitude
 
 // ═══════════════════════════════════════════════════════
 // BAYER 8×8 ORDERED DITHER MATRIX
@@ -115,10 +112,8 @@ interface Sample {
 }
 
 function sampleBird(x: number, y: number, wf: number): Sample | null {
-  // Bounds in bird space
   if (x < -46 || x > 34 || y < -38 || y > 30) return null;
 
-  // ═══ DISTANCES ═══
   const bodyD = eDist(x, y, 0, 0, 15, 9);
   const chestD = eDist(x, y, -8, 3, 10, 7);
   const headD = eDist(x, y, -18, -5, 9, 8.5);
@@ -126,7 +121,6 @@ function sampleBird(x: number, y: number, wf: number): Sample | null {
   const neckD = eDist(x, y, -9, -2, 8, 6);
   const gorgetD = eDist(x, y, -13, 1, 6.5, 4.5);
 
-  // Beak
   const bkBase = -26,
     bkTip = -42,
     bkCY = -6.5;
@@ -135,29 +129,24 @@ function sampleBird(x: number, y: number, wf: number): Sample | null {
   const bkW = 2.5 * (1 - bkProg * 0.85);
   const inBeak = x <= bkBase && x >= bkTip && Math.abs(y - bkCY) <= bkW;
 
-  // Eye
   const eyeD = eDist(x, y, -21, -7, 2, 2);
   const eyeHD = eDist(x, y, -22, -7.8, 0.7, 0.7);
 
-  // Upper wing (3 layers, animated)
   const wAng = -0.3 + wf * 0.85;
   const wY = -7 - wf * 14;
   const covD = reDist(x, y, 3, wY, 14, 6, wAng);
   const secD = reDist(x, y, 5, wY - 2, 18, 4.5, wAng - 0.12);
   const priD = reDist(x, y, 7, wY - 4, 22, 3.5, wAng - 0.25);
 
-  // Lower wing (2 layers, animated)
   const w2Ang = 0.2 - wf * 0.45;
   const w2Y = 5 + wf * 8;
   const lcD = reDist(x, y, 4, w2Y, 12, 5, w2Ang);
   const lpD = reDist(x, y, 6, w2Y + 2, 16, 3.5, w2Ang - 0.1);
 
-  // Tail (3 fanned feathers)
   const tcD = reDist(x, y, 16, 1, 14, 3, 0.04);
   const tuD = reDist(x, y, 16, -1.5, 13, 2.5, -0.1);
   const tlD = reDist(x, y, 16, 3.5, 13, 2.5, 0.1);
 
-  // ═══ UNIONS ═══
   const mainD = Math.min(bodyD, chestD, headD, crownD, neckD);
   const wingD = Math.min(covD, secD, priD);
   const wing2D = Math.min(lcD, lpD);
@@ -166,8 +155,6 @@ function sampleBird(x: number, y: number, wf: number): Sample | null {
     x > 9 ? tuD : 99,
     x > 9 ? tlD : 99
   );
-
-  // ═══ RENDER PRIORITY ═══
 
   if (eyeHD <= 1) return { color: PAL.eyeH, intensity: 1 };
   if (eyeD <= 1.2) return { color: PAL.eye, intensity: edgeI(eyeD) };
@@ -180,7 +167,6 @@ function sampleBird(x: number, y: number, wf: number): Sample | null {
     };
   }
 
-  // Main body union
   if (mainD <= 1.30) {
     const intensity = edgeI(mainD);
     let color: RGB;
@@ -214,7 +200,6 @@ function sampleBird(x: number, y: number, wf: number): Sample | null {
     return { color, intensity };
   }
 
-  // Upper wing
   if (wingD <= 1.30) {
     const t = Math.sqrt(Math.min(1, wingD));
     let color: RGB;
@@ -228,7 +213,6 @@ function sampleBird(x: number, y: number, wf: number): Sample | null {
     return { color, intensity: edgeI(wingD) };
   }
 
-  // Lower wing
   if (wing2D <= 1.30) {
     const t = Math.sqrt(Math.min(1, wing2D));
     const color =
@@ -238,7 +222,6 @@ function sampleBird(x: number, y: number, wf: number): Sample | null {
     return { color, intensity: edgeI(wing2D) };
   }
 
-  // Tail
   if (tailD <= 1.30) {
     const p = Math.min(1, (x - 7) / 22);
     const d = Math.min(tcD, tuD, tlD);
@@ -253,7 +236,7 @@ function sampleBird(x: number, y: number, wf: number): Sample | null {
 }
 
 // ═══════════════════════════════════════════════════════
-// TRAILING PARTICLES — spawn near bird, drift away
+// TRAILING PARTICLES
 // ═══════════════════════════════════════════════════════
 interface Particle {
   x: number;
@@ -297,7 +280,6 @@ export default function VoxelBird() {
     const ctx = canvas.getContext('2d')!;
     ctx.scale(dpr, dpr);
 
-    // Seed particles at center
     particlesRef.current = Array.from({ length: 22 }, () =>
       spawnP(COLS / 2, ROWS / 2)
     );
@@ -307,7 +289,7 @@ export default function VoxelBird() {
     function render(t: number) {
       ctx.clearRect(0, 0, W, H);
 
-      // ═══ WING PHASE — faster flap for small bird ═══
+      // ═══ WING PHASE ═══
       const wf = (Math.sin(t * 0.004) + 1) / 2;
 
       // ═══ TRAJECTORY — golden-ratio Lissajous (never repeats) ═══
@@ -317,7 +299,7 @@ export default function VoxelBird() {
       const trajOY =
         Math.sin(pt * 2) * TRAJ_AY + Math.cos(pt * 0.618) * 3;
 
-      // ═══ VELOCITY (analytical derivative) for orientation ═══
+      // ═══ VELOCITY for orientation ═══
       const velX =
         Math.cos(pt) * TRAJ_AX +
         Math.cos(pt * 1.618) * 3.5 * 1.618;
@@ -325,16 +307,13 @@ export default function VoxelBird() {
         Math.cos(pt * 2) * TRAJ_AY * 2 -
         Math.sin(pt * 0.618) * 3 * 0.618;
 
-      // Bird faces the direction of travel
       const facingRight = velX > 0;
-      // Subtle pitch tilt when ascending/descending
       const pitch = Math.atan2(velY, Math.abs(velX) + 10) * 0.22;
 
-      // Bird center on the canvas grid
       const birdCX = COLS / 2 + trajOX;
       const birdCY = ROWS / 2 + trajOY;
 
-      // ═══ PARTICLES (trailing) ═══
+      // ═══ PARTICLES ═══
       const parts = particlesRef.current;
       for (const p of parts) {
         p.x += p.vx;
@@ -347,7 +326,6 @@ export default function VoxelBird() {
           p.y < 0 ||
           p.y >= ROWS
         ) {
-          // Respawn near the bird's current position
           Object.assign(p, spawnP(birdCX, birdCY));
         }
         const fadeIn = Math.min(1, p.life / 30);
@@ -368,8 +346,7 @@ export default function VoxelBird() {
       ctx.globalAlpha = 1;
 
       // ═══ BIRD RENDERING ═══
-      // Only iterate cells near the bird (bounding box optimization)
-      const RAD = Math.ceil(46 * SCALE) + 2; // ~20 grid cells
+      const RAD = Math.ceil(46 * SCALE) + 2;
       const gxMin = Math.max(0, Math.floor(birdCX - RAD));
       const gxMax = Math.min(COLS - 1, Math.ceil(birdCX + RAD));
       const gyMin = Math.max(0, Math.floor(birdCY - RAD));
@@ -380,18 +357,14 @@ export default function VoxelBird() {
 
       for (let gy = gyMin; gy <= gyMax; gy++) {
         for (let gx = gxMin; gx <= gxMax; gx++) {
-          // Canvas → bird-local transform
           let dx = gx - birdCX;
           let dy = gy - birdCY;
 
-          // Mirror when flying right (bird shape faces left)
           if (facingRight) dx = -dx;
 
-          // Undo pitch rotation
           const rx = cp * dx + sp * dy;
           const ry = -sp * dx + cp * dy;
 
-          // Scale to bird space
           const bx = rx / SCALE;
           const by = ry / SCALE;
 
@@ -403,11 +376,9 @@ export default function VoxelBird() {
             py = gy * CELL;
           const [r, g, b] = s.color;
 
-          // Voxel face
           ctx.fillStyle = `rgb(${r | 0},${g | 0},${b | 0})`;
           ctx.fillRect(px, py, VOXEL, VOXEL);
 
-          // Subtle 3D edges
           ctx.fillStyle = 'rgba(255,255,255,0.09)';
           ctx.fillRect(px, py, VOXEL, 1);
           ctx.fillRect(px, py, 1, VOXEL);
