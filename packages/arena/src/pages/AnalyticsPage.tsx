@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Download,
@@ -19,7 +19,8 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts'
-import { arenaStats, metricCorrelations, fairnessData } from '../data/mockData'
+import { arenaStats as mockArenaStats, metricCorrelations, fairnessData } from '../data/mockData'
+import { api, type AnalyticsSummary } from '../api/client'
 
 // ============================================================
 // Types
@@ -214,13 +215,20 @@ function CustomTooltipWer({
 // Tab Content Components
 // ============================================================
 
-function VoteAnalyticsTab() {
-  const stats = [
-    { label: 'Total Votes', value: arenaStats.totalVotes.toLocaleString(), icon: Vote },
-    { label: 'Unique Voters', value: arenaStats.uniqueVoters.toLocaleString(), icon: Users },
-    { label: 'Avg Battles / Voter', value: arenaStats.avgBattlesPerVoter.toFixed(1), icon: BarChart3 },
-    { label: "Krippendorff's \u03B1", value: arenaStats.interRaterAgreement.toFixed(2), icon: Scale },
-  ]
+function VoteAnalyticsTab({ apiSummary }: { apiSummary: AnalyticsSummary | null }) {
+  const stats = apiSummary
+    ? [
+        { label: 'Total Battles', value: apiSummary.total_battles.toLocaleString(), icon: Vote },
+        { label: 'Total Models', value: apiSummary.total_models.toLocaleString(), icon: Users },
+        { label: 'Evaluations', value: apiSummary.completed_evaluations.toLocaleString(), icon: BarChart3 },
+        { label: 'Scenarios', value: apiSummary.total_scenarios.toLocaleString(), icon: Scale },
+      ]
+    : [
+        { label: 'Total Votes', value: mockArenaStats.totalVotes.toLocaleString(), icon: Vote },
+        { label: 'Unique Voters', value: mockArenaStats.uniqueVoters.toLocaleString(), icon: Users },
+        { label: 'Avg Battles / Voter', value: mockArenaStats.avgBattlesPerVoter.toFixed(1), icon: BarChart3 },
+        { label: "Krippendorff's \u03B1", value: mockArenaStats.interRaterAgreement.toFixed(2), icon: Scale },
+      ]
 
   return (
     <motion.div
@@ -643,7 +651,7 @@ function PapersTab() {
           Coming Soon
         </h3>
         <p className="text-text-body text-sm max-w-md leading-relaxed">
-          Our research paper on Voice Loop Arena will be submitted to Interspeech 2026.
+          Our research paper on KoeCode Arena will be submitted to Interspeech 2026.
         </p>
       </div>
     </motion.div>
@@ -667,7 +675,7 @@ function DatasetTab() {
           Dataset Download
         </h3>
         <p className="text-text-body text-sm max-w-md leading-relaxed mb-6">
-          Voice Loop Arena dataset (CC-BY-4.0) — Coming with Phase 3 launch
+          KoeCode Arena dataset (CC-BY-4.0) — Coming with Phase 3 launch
         </p>
         <button
           disabled
@@ -687,11 +695,18 @@ function DatasetTab() {
 
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<TabId>('votes')
+  const [apiSummary, setApiSummary] = useState<AnalyticsSummary | null>(null)
+
+  useEffect(() => {
+    api.analytics.summary().then(setApiSummary).catch(() => {
+      // Fallback to mock data (apiSummary stays null)
+    })
+  }, [])
 
   function renderTab() {
     switch (activeTab) {
       case 'votes':
-        return <VoteAnalyticsTab />
+        return <VoteAnalyticsTab apiSummary={apiSummary} />
       case 'correlations':
         return <MetricCorrelationsTab />
       case 'fairness':

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Mic,
@@ -11,13 +11,22 @@ import {
   Keyboard,
   BarChart3,
   Waves,
+  Loader2,
 } from 'lucide-react'
-import { models } from '../data/mockData'
+import { models as mockModels } from '../data/mockData'
 import WaveformVisualizer from '../components/WaveformVisualizer'
+import { api, type Model as ApiModel, type TTSGenerateResponse } from '../api/client'
 
 // ---- Types ----
 type Mode = 'voice' | 'tts' | 'metrics'
 type PlaybackSpeed = 0.5 | 1 | 1.5 | 2
+
+interface DisplayModel {
+  id: string
+  name: string
+  provider: string
+  type: string
+}
 
 // ---- Constants ----
 const MODE_TABS: { id: Mode; label: string; icon: typeof Mic }[] = [
@@ -28,24 +37,16 @@ const MODE_TABS: { id: Mode; label: string; icon: typeof Mic }[] = [
 
 const PLAYBACK_SPEEDS: PlaybackSpeed[] = [0.5, 1, 1.5, 2]
 
-const LIVE_METRICS = [
-  { key: 'ttfb', label: 'TTFB', value: '180ms', isFast: true },
-  { key: 'duration', label: 'Duration', value: '8.1s', isFast: false },
-  { key: 'rtf', label: 'RTF', value: '0.23', isFast: false },
-  { key: 'utmos', label: 'UTMOS', value: '4.21', isFast: false },
-  { key: 'nisqa', label: 'NISQA', value: '4.05', isFast: false },
-  { key: 'wer', label: 'WER', value: '3.2%', isFast: false },
-]
-
 const TYPE_LABELS: Record<string, string> = {
   tts: 'TTS',
   asr: 'ASR',
   s2s: 'S2S',
   agent: 'Agent',
   speech_llm: 'LLM',
+  cartesia: 'TTS',
+  smallestai: 'TTS',
+  deepgram: 'TTS',
 }
-
-const displayModels = models.slice(0, 6)
 
 // ---- Fade animation variant ----
 const fadeIn = {
@@ -58,14 +59,129 @@ const fadeIn = {
 // ---- Component ----
 export default function PlaygroundPage() {
   const [activeMode, setActiveMode] = useState<Mode>('tts')
-  const [selectedModel, setSelectedModel] = useState(models[0].id)
+  const [selectedModel, setSelectedModel] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [inputText, setInputText] = useState(
-    'Welcome to Voice Loop Arena. The future of voice AI evaluation starts here.'
+    'Welcome to KoeCode Arena. The future of voice AI evaluation starts here.'
   )
   const [isPlaying, setIsPlaying] = useState(false)
   const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(1)
   const [showSpectrogram, setShowSpectrogram] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [ttsResult, setTtsResult] = useState<TTSGenerateResponse | null>(null)
+  const [progress, setProgress] = useState(0)
+  const [engine, setEngine] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
+
+  // Fetch models from API with fallback
+  const [displayModels, setDisplayModels] = useState<DisplayModel[]>(
+    mockModels.slice(0, 6).map(m => ({ id: m.id, name: m.name, provider: m.provider, type: m.type }))
+  )
+
+  useEffect(() => {
+    api.models.list().then((apiModels) => {
+      if (apiModels.length > 0) {
+        setDisplayModels(apiModels.map(m => ({
+          id: m.id,
+          name: m.name,
+          provider: m.provider,
+          type: m.provider,
+        })))
+        setSelectedModel(apiModels[0].id)
+      }
+    }).catch(() => {
+      // Fallback to mock data
+      if (mockModels.length > 0) setSelectedModel(mockModels[0].id)
+    })
+  }, [])
+
+  // Audio event handlers
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    const onTimeUpdate = () => {
+      if (audio.duration) setProgress(audio.currentTime / audio.duration)
+    }
+    const onEnded = () => {
+      setIsPlaying(false)
+      setProgress(1)
+    }
+    audio.addEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('ended', onEnded)
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate)
+      audio.removeEventListener('ended', onEnded)
+    }
+  }, [ttsResult])
+
+  const selectedModelObj = displayModels.find((m) => m.id === selectedModel)
+  const isSmallestAI = selectedModelObj?.provider === 'smallestai'
+  const isDeepgram = selectedModelObj?.provider === 'deepgram'
+  const showEngineSelector = isSmallestAI || isDeepgram
+
+  // Reset engine when switching providers
+  useEffect(() => {
+    setEngine(null)
+  }, [selectedModelObj?.provider])
+
+  async function handleGenerate() {
+    if (!selectedModel || !inputText.trim()) return
+    setGenerating(true)
+    setTtsResult(null)
+    setProgress(0)
+    setIsPlaying(false)
+    try {
+      const result = await api.tts.generate(selectedModel, inputText, engine ?? undefined)
+      setTtsResult(result)
+    } catch (e) {
+      // Show error in console
+      console.error('TTS generation failed:', e)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  function handlePlayPause() {
+    const audio = audioRef.current
+    if (!audio) return
+    if (isPlaying) {
+      audio.pause()
+      setIsPlaying(false)
+    } else {
+      audio.playbackRate = playbackSpeed
+      audio.play()
+      setIsPlaying(true)
+    }
+  }
+
+  function handleReset() {
+    const audio = audioRef.current
+    if (audio) {
+      audio.pause()
+      audio.currentTime = 0
+    }
+    setIsPlaying(false)
+    setProgress(0)
+  }
+
+  // Update playback speed on audio element
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackSpeed
+    }
+  }, [playbackSpeed])
+
+  const liveMetrics = ttsResult ? [
+    { key: 'ttfb', label: 'TTFB', value: `${Math.round(ttsResult.ttfb_ms)}ms`, isFast: ttsResult.ttfb_ms < 300 },
+    { key: 'duration', label: 'Duration', value: `${ttsResult.duration_seconds.toFixed(1)}s`, isFast: false },
+    { key: 'genTime', label: 'Gen Time', value: `${Math.round(ttsResult.generation_time_ms)}ms`, isFast: false },
+    { key: 'engine', label: 'Engine', value: isSmallestAI ? (engine ?? 'lightning') : isDeepgram ? (engine ?? 'aura-2') : 'sonic', isFast: false },
+  ] : [
+    { key: 'ttfb', label: 'TTFB', value: '—', isFast: false },
+    { key: 'duration', label: 'Duration', value: '—', isFast: false },
+    { key: 'genTime', label: 'Gen Time', value: '—', isFast: false },
+    { key: 'engine', label: 'Engine', value: '—', isFast: false },
+  ]
 
   const filteredModels = displayModels.filter(
     (m) =>
@@ -137,6 +253,11 @@ export default function PlaygroundPage() {
         <AnimatePresence mode="wait">
           {activeMode === 'tts' && (
             <motion.div key="tts" {...fadeIn} className="space-y-6">
+              {/* Hidden audio element */}
+              {ttsResult && (
+                <audio ref={audioRef} src={ttsResult.audio_url} preload="auto" />
+              )}
+
               {/* ---- Model Selector ---- */}
               <ModelSelector
                 models={filteredModels}
@@ -145,6 +266,37 @@ export default function PlaygroundPage() {
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
               />
+
+              {/* ---- Engine Selector (SmallestAI / Deepgram) ---- */}
+              {showEngineSelector && (
+                <div className="bg-bg-surface rounded-xl border border-border-default p-6">
+                  <label className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.2em] text-text-faint block mb-4">
+                    Engine Variant
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                    {(isSmallestAI
+                      ? ['lightning', 'lightning-large', 'lightning-v2']
+                      : ['aura-2', 'aura']
+                    ).map((eng) => {
+                      const defaultEngine = isSmallestAI ? 'lightning' : 'aura-2'
+                      const isActive = (engine ?? defaultEngine) === eng
+                      return (
+                        <button
+                          key={eng}
+                          onClick={() => setEngine(eng)}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                            isActive
+                              ? 'border-accent/40 bg-accent/10 text-accent'
+                              : 'border-border-default bg-bg-hover/50 text-text-body hover:border-border-strong hover:text-text-primary'
+                          }`}
+                        >
+                          {eng}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* ---- Input Section ---- */}
               <div className="bg-bg-surface rounded-xl border border-border-default p-6">
@@ -169,10 +321,23 @@ export default function PlaygroundPage() {
                   <motion.button
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
-                    className="flex items-center gap-2 bg-accent text-bg-primary font-medium rounded-lg px-5 py-2.5 text-sm hover:brightness-110 transition-all"
+                    onClick={handleGenerate}
+                    disabled={generating || !selectedModel || !inputText.trim()}
+                    className={`flex items-center gap-2 bg-accent text-bg-primary font-medium rounded-lg px-5 py-2.5 text-sm transition-all ${
+                      generating ? 'opacity-70 cursor-wait' : 'hover:brightness-110'
+                    }`}
                   >
-                    <Send size={14} />
-                    Generate
+                    {generating ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Send size={14} />
+                        Generate
+                      </>
+                    )}
                   </motion.button>
                 </div>
               </div>
@@ -199,12 +364,13 @@ export default function PlaygroundPage() {
                   <motion.button
                     whileHover={{ scale: 1.08 }}
                     whileTap={{ scale: 0.92 }}
-                    onClick={() => setIsPlaying(!isPlaying)}
+                    onClick={handlePlayPause}
+                    disabled={!ttsResult}
                     className={`relative w-11 h-11 rounded-full flex items-center justify-center border-2 transition-all shrink-0 ${
                       isPlaying
                         ? 'border-accent bg-accent/10'
                         : 'border-border-strong bg-transparent hover:border-accent/40'
-                    }`}
+                    } ${!ttsResult ? 'opacity-40 cursor-not-allowed' : ''}`}
                   >
                     {isPlaying && (
                       <motion.div
@@ -225,16 +391,17 @@ export default function PlaygroundPage() {
                     <div className="w-full h-1.5 rounded-full bg-bg-hover overflow-hidden">
                       <motion.div
                         className="h-full rounded-full bg-accent"
-                        initial={{ width: '0%' }}
-                        animate={{ width: isPlaying ? '60%' : '40%' }}
-                        transition={{ duration: 0.8, ease: 'easeOut' }}
+                        style={{ width: `${progress * 100}%` }}
+                        transition={{ duration: 0.1, ease: 'linear' }}
                       />
                     </div>
                   </div>
 
                   {/* Time */}
                   <span className="font-[family-name:var(--font-mono)] text-xs text-text-faint shrink-0">
-                    3.4s / 8.1s
+                    {ttsResult
+                      ? `${(progress * ttsResult.duration_seconds).toFixed(1)}s / ${ttsResult.duration_seconds.toFixed(1)}s`
+                      : '— / —'}
                   </span>
                 </div>
 
@@ -258,7 +425,7 @@ export default function PlaygroundPage() {
                   <motion.button
                     whileHover={{ scale: 1.06 }}
                     whileTap={{ scale: 0.94, rotate: -90 }}
-                    onClick={() => setIsPlaying(false)}
+                    onClick={handleReset}
                     className="flex items-center gap-1.5 text-xs text-text-faint hover:text-text-body transition-colors"
                   >
                     <RotateCcw size={13} />
@@ -272,8 +439,8 @@ export default function PlaygroundPage() {
                 <label className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.2em] text-text-faint block mb-5">
                   Live Metrics
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {LIVE_METRICS.map((metric, i) => (
+                <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
+                  {liveMetrics.map((metric, i) => (
                     <motion.div
                       key={metric.key}
                       initial={{ opacity: 0, y: 10 }}
@@ -451,7 +618,7 @@ function ModelSelector({
   searchQuery,
   onSearchChange,
 }: {
-  models: typeof models
+  models: DisplayModel[]
   selectedModel: string
   onSelect: (id: string) => void
   searchQuery: string

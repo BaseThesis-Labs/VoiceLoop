@@ -51,7 +51,7 @@ export default function ArenaNavbar() {
             </svg>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-text-primary font-semibold text-[15px] tracking-tight">Voice Loop</span>
+            <span className="text-text-primary font-semibold text-[15px] tracking-tight">KoeCode</span>
             <span className="text-accent font-mono text-xs tracking-wider uppercase">Arena</span>
           </div>
         </Link>

@@ -227,7 +227,7 @@ export default function TextToAgentSection() {
               className="text-[16px] text-text-body leading-relaxed mb-8"
             >
               Write a natural language description of the voice agent you need.
-              VoiceLoop generates the strategy catalog, tool configuration, intent
+              KoeCode generates the strategy catalog, tool configuration, intent
               dimensions, and system prompts. Go from idea to production agent in
               minutes.
             </motion.p>

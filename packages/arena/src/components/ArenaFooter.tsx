@@ -14,7 +14,7 @@ const footerLinks = {
     { label: 'Cite Us', to: '/analytics' },
   ],
   Company: [
-    { label: 'Voice Loop', href: '/' },
+    { label: 'KoeCode', href: '/' },
     { label: 'Blog', href: '/blog' },
     { label: 'GitHub', href: '#' },
     { label: 'Twitter', href: '#' },
@@ -29,7 +29,7 @@ export default function ArenaFooter() {
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-baseline gap-1.5 mb-4">
-              <span className="text-text-primary font-semibold text-[15px]">Voice Loop</span>
+              <span className="text-text-primary font-semibold text-[15px]">KoeCode</span>
               <span className="text-accent font-mono text-xs tracking-wider uppercase">Arena</span>
             </div>
             <p className="text-text-faint text-sm leading-relaxed max-w-[240px]">
@@ -62,10 +62,10 @@ export default function ArenaFooter() {
 
         <div className="mt-14 pt-6 border-t border-border-default flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-text-faint text-xs">
-            Voice Loop Arena — Evaluating voice AI the way humans experience it.
+            KoeCode Arena — Evaluating voice AI the way humans experience it.
           </p>
           <p className="text-text-faint text-xs font-mono">
-            2026 Voice Loop
+            2026 KoeCode
           </p>
         </div>
       </div>

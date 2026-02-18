@@ -51,16 +51,23 @@ async def submit_evaluation(eval_id: str) -> None:
         async with async_session() as db:
             result = await db.execute(select(Evaluation).where(Evaluation.id == eval_id))
             eval_record = result.scalar_one()
-            eval_record.status = "completed"
-            eval_record.metrics_json = metrics_dict.get("overall_metrics")
-            eval_record.diarization_json = {
-                "num_speakers": metrics_dict.get("num_speakers"),
-                "speaker_metrics": metrics_dict.get("speaker_metrics"),
-                "timeline": metrics_dict.get("diarization_timeline"),
-            }
-            eval_record.duration_seconds = (
-                metrics_dict.get("overall_metrics", {}).get("total_duration_seconds")
-            )
+
+            # Handle graceful failure from worker (missing dependencies etc.)
+            if metrics_dict.get("status") == "failed":
+                eval_record.status = "failed"
+                eval_record.error_message = metrics_dict.get("error", "Unknown eval error")
+            else:
+                eval_record.status = "completed"
+                eval_record.metrics_json = metrics_dict.get("overall_metrics")
+                eval_record.diarization_json = {
+                    "num_speakers": metrics_dict.get("num_speakers"),
+                    "speaker_metrics": metrics_dict.get("speaker_metrics"),
+                    "timeline": metrics_dict.get("diarization_timeline"),
+                }
+                eval_record.duration_seconds = (
+                    eval_record.duration_seconds
+                    or metrics_dict.get("overall_metrics", {}).get("total_duration_seconds")
+                )
             await db.commit()
 
     except Exception as e:

@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { motion, useInView } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
@@ -14,9 +14,10 @@ import {
   Zap,
   Equal,
 } from 'lucide-react'
-import { recentBattles, arenaStats, models, agents, scenarios } from '../data/mockData'
+import { recentBattles as mockBattles, arenaStats as mockStats, models, agents, scenarios } from '../data/mockData'
 import WaveformVisualizer from '../components/WaveformVisualizer'
 import AuroraGradient from '../components/AuroraGradient'
+import { api } from '../api/client'
 
 // ---------------------------------------------------------------------------
 // Animation variants
@@ -143,6 +144,25 @@ function AnimatedSection({
 // ---------------------------------------------------------------------------
 
 export default function ArenaLanding() {
+  const [arenaStats, setArenaStats] = useState(mockStats)
+  const [recentBattles] = useState(mockBattles)
+
+  useEffect(() => {
+    api.analytics.summary().then((summary) => {
+      setArenaStats({
+        totalBattles: summary.total_battles,
+        totalModels: summary.total_models,
+        totalAgents: 0,
+        totalScenarios: summary.total_scenarios,
+        uniqueVoters: 0,
+        avgBattlesPerVoter: 0,
+        interRaterAgreement: 0,
+      })
+    }).catch(() => {
+      // Fallback to mock stats
+    })
+  }, [])
+
   return (
     <main className="relative overflow-hidden">
       {/* ================================================================ */}
@@ -171,7 +191,7 @@ export default function ArenaLanding() {
             animate="visible"
             className="font-[family-name:var(--font-mono)] text-xs tracking-[0.25em] uppercase text-accent mb-6"
           >
-            Voice Loop Arena
+            KoeCode Arena
           </motion.p>
 
           {/* Display heading */}
