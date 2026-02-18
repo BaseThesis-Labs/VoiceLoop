@@ -10,8 +10,18 @@ export default function Hero() {
       {/* Dark overlay to reduce background intensity */}
       <div className="absolute inset-0 bg-black/40 pointer-events-none" />
 
-      <div className="relative max-w-[1280px] mx-auto px-6 min-h-[calc(100vh-88px)] flex items-center">
-        <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-4 w-full py-12">
+      <div className="relative max-w-[1280px] mx-auto px-6 min-h-[calc(100vh-88px)] flex items-end">
+        <div className="relative w-full pb-20 pt-12">
+          {/* Bird — positioned diagonally above the text block's top-left */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, delay: 0.3 }}
+            className="absolute w-[400px] h-[300px] -top-[260px] -left-[60px] pointer-events-none"
+          >
+            <VoxelBird />
+          </motion.div>
+
           {/* Left — Text content */}
           <div className="w-full lg:w-[50%] text-left">
             {/* Dark backdrop behind text block */}
@@ -55,16 +65,6 @@ export default function Hero() {
               </div>
             </motion.div>
           </div>
-
-          {/* Right — Voxel dither bird */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.3 }}
-            className="w-full lg:w-[50%] flex items-center justify-center"
-          >
-            <VoxelBird />
-          </motion.div>
         </div>
       </div>
     </section>
