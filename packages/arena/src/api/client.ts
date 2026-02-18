@@ -82,6 +82,49 @@ export interface AnalyticsSummary {
   total_scenarios: number;
 }
 
+export interface PromptItem {
+  id: string;
+  text: string;
+  category: string;
+  scenario_id: string | null;
+  created_at: string;
+}
+
+export interface GeneratedBattle {
+  id: string;
+  prompt_text: string;
+  prompt_category: string;
+  audio_a_url: string;
+  audio_b_url: string;
+  model_a_id: string;
+  model_b_id: string;
+  model_a_name: string;
+  model_b_name: string;
+  provider_a: string;
+  provider_b: string;
+  eval_a_id: string;
+  eval_b_id: string;
+  duration_a: number;
+  duration_b: number;
+  ttfb_a: number;
+  ttfb_b: number;
+}
+
+export interface TTSGenerateRequest {
+  model_id: string;
+  text: string;
+  engine?: string;
+}
+
+export interface TTSGenerateResponse {
+  audio_url: string;
+  duration_seconds: number;
+  ttfb_ms: number;
+  generation_time_ms: number;
+  model_id: string;
+  model_name: string;
+}
+
 export const api = {
   models: {
     list: (provider?: string) =>
@@ -135,6 +178,21 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ winner }),
       }),
+    generate: () =>
+      request<GeneratedBattle>('/battles/generate', { method: 'POST' }),
+  },
+
+  tts: {
+    generate: (modelId: string, text: string, engine?: string) =>
+      request<TTSGenerateResponse>('/tts/generate', {
+        method: 'POST',
+        body: JSON.stringify({ model_id: modelId, text, ...(engine ? { engine } : {}) }),
+      }),
+  },
+
+  prompts: {
+    list: (category?: string) =>
+      request<PromptItem[]>(`/prompts${category ? `?category=${category}` : ''}`),
   },
 
   leaderboard: {

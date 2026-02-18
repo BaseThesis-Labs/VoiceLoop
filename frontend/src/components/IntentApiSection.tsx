@@ -262,7 +262,7 @@ export default function IntentApiSection() {
               className="text-[16px] text-text-body leading-relaxed mb-8"
             >
               Traditional voice AI classifies intent into buckets &mdash; booking,
-              complaint, inquiry. VoiceLoop computes a graded 18-dimensional intent
+              complaint, inquiry. KoeCode computes a graded 18-dimensional intent
               vector from prosody, semantics, user history, and context. Every
               dimension scored 0.0 to 1.0. Every score explainable.
             </motion.p>

@@ -4,6 +4,9 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/voiceloop_arena"
     hf_token: str = ""
+    cartesia_api_key: str = ""
+    smallest_api_key: str = ""
+    deepgram_api_key: str = ""
     enable_diarization: bool = True
     default_num_speakers: int = 2
     api_host: str = "0.0.0.0"

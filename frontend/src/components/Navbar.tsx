@@ -76,14 +76,15 @@ export default function Navbar() {
   }
 
   return (
-    <nav
-      className={`sticky top-0 z-[60] h-16 transition-all duration-300 ${
-        scrolled
-          ? 'bg-bg-primary/80 backdrop-blur-xl border-b border-border-default shadow-[0_1px_12px_rgba(0,0,0,0.3)]'
-          : 'bg-bg-primary/50 backdrop-blur-md border-b border-white/[0.04]'
-      }`}
-    >
-      <div className="max-w-[1280px] mx-auto px-6 h-full flex items-center justify-between">
+    <div className="sticky top-0 z-[60] w-full flex justify-center px-4 bg-transparent pointer-events-none">
+      <nav
+        className={`w-full max-w-[1060px] h-14 mt-2 rounded-2xl transition-all duration-300 pointer-events-auto ${
+          scrolled
+            ? 'bg-bg-primary/90 backdrop-blur-xl border border-border-default shadow-[0_4px_24px_rgba(0,0,0,0.4)]'
+            : 'bg-bg-primary/80 backdrop-blur-md border border-white/[0.06]'
+        }`}
+      >
+        <div className="px-5 h-full flex items-center justify-between">
         {/* ── Logo + Wordmark ── */}
         <Link to="/" className="flex items-center gap-2.5 shrink-0">
           <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
@@ -116,7 +117,7 @@ export default function Navbar() {
             <rect x="18.3" y="12.5" width="2.2" height="7" rx="1.1" fill="url(#vlg)" />
           </svg>
           <span className="text-[15px] font-semibold text-text-primary tracking-tight font-[family-name:var(--font-sans)]">
-            VoiceLoop
+            KoeCode
           </span>
         </Link>
 
@@ -161,43 +162,44 @@ export default function Navbar() {
         >
           {mobileOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
-      </div>
+        </div>
 
-      {/* ── Mobile Menu ── */}
-      {mobileOpen && (
-        <div className="md:hidden fixed inset-x-0 top-16 bottom-0 bg-bg-primary/95 backdrop-blur-xl border-t border-border-default overflow-y-auto">
-          <div className="max-w-[1280px] mx-auto px-6 py-6 flex flex-col gap-1">
-            {navLinks.map((link) =>
-              renderNavLink(
-                link,
-                'block text-sm font-medium text-text-body hover:text-text-primary py-3 transition-colors',
-                () => setMobileOpen(false),
-              ),
-            )}
+        {/* ── Mobile Menu ── */}
+        {mobileOpen && (
+          <div className="md:hidden fixed inset-x-0 top-[4.5rem] bottom-0 bg-bg-primary/95 backdrop-blur-xl border-t border-border-default overflow-y-auto rounded-b-2xl">
+            <div className="px-5 py-6 flex flex-col gap-1">
+              {navLinks.map((link) =>
+                renderNavLink(
+                  link,
+                  'block text-sm font-medium text-text-body hover:text-text-primary py-3 transition-colors',
+                  () => setMobileOpen(false),
+                ),
+              )}
 
-            <div className="mt-4 pt-4 border-t border-border-default flex flex-col gap-3">
-              <a
-                href="#"
-                className="text-sm font-medium text-text-body hover:text-text-primary transition-colors py-2"
-              >
-                Contact Sales
-              </a>
-              <a
-                href="#"
-                className="text-center text-sm font-medium text-text-body border border-border-strong rounded-lg px-4 py-2.5 hover:text-text-primary hover:border-text-faint transition-all"
-              >
-                Sign in
-              </a>
-              <a
-                href="#"
-                className="block w-full text-center text-sm font-semibold text-accent border border-accent rounded-lg px-4 py-2.5 hover:bg-accent/10 transition-all"
-              >
-                Start for Free
-              </a>
+              <div className="mt-4 pt-4 border-t border-border-default flex flex-col gap-3">
+                <a
+                  href="#"
+                  className="text-sm font-medium text-text-body hover:text-text-primary transition-colors py-2"
+                >
+                  Contact Sales
+                </a>
+                <a
+                  href="#"
+                  className="text-center text-sm font-medium text-text-body border border-border-strong rounded-lg px-4 py-2.5 hover:text-text-primary hover:border-text-faint transition-all"
+                >
+                  Sign in
+                </a>
+                <a
+                  href="#"
+                  className="block w-full text-center text-sm font-semibold text-accent border border-accent rounded-lg px-4 py-2.5 hover:bg-accent/10 transition-all"
+                >
+                  Start for Free
+                </a>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </nav>
+        )}
+      </nav>
+    </div>
   );
 }

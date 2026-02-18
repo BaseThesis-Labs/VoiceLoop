@@ -73,7 +73,7 @@ export default function Footer() {
             {/* Column 1: Brand */}
             <div className="col-span-2">
               <p className="text-[15px] font-semibold text-text-primary mb-4">
-                VoiceLoop
+                KoeCode
               </p>
               <p className="text-[13px] text-text-body leading-relaxed mb-5 max-w-[260px]">
                 The intelligence layer for production voice AI.
@@ -122,7 +122,7 @@ export default function Footer() {
           {/* Bottom bar */}
           <div className="mt-10 pt-8 border-t border-border-default flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-[12px] text-text-faint">
-              &copy; 2026 VoiceLoop. All rights reserved.
+              &copy; 2026 KoeCode. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
               <a href="#" className="text-[12px] text-text-faint hover:text-text-body transition-colors">

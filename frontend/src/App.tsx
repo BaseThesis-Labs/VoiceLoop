@@ -20,9 +20,9 @@ function HomePage() {
       <Navbar />
       <Hero />
       <InteractiveDemo />
+      <EvalsArenaSection />
       <IntentApiSection />
       <DecisionIntelligenceSection />
-      <EvalsArenaSection />
       <TextToAgentSection />
       <SocialProof />
       <CodeSection />

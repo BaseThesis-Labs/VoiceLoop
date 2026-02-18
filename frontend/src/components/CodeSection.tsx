@@ -6,9 +6,9 @@ const tabs = [
   {
     label: 'Python',
     lang: 'python',
-    code: `from voiceloop import VoiceLoop, IntentAPI
+    code: `from koecode import KoeCode, IntentAPI
 
-client = VoiceLoop(api_key="vl_...")
+client = KoeCode(api_key="vl_...")
 intent = IntentAPI()
 
 # Compute the intent vector from audio + transcript
@@ -31,9 +31,9 @@ print(directive.reasoning)     # "Frustration rising..."`,
   {
     label: 'TypeScript',
     lang: 'typescript',
-    code: `import { VoiceLoop, IntentAPI } from "@voiceloop/sdk";
+    code: `import { KoeCode, IntentAPI } from "@koecode/sdk";
 
-const client = new VoiceLoop({ apiKey: "vl_..." });
+const client = new KoeCode({ apiKey: "vl_..." });
 const intent = new IntentAPI();
 
 // Compute the intent vector
@@ -55,7 +55,7 @@ console.log(directive.activeTools);  // ["search_flights", "apply_discount"]`,
   {
     label: 'cURL',
     lang: 'bash',
-    code: `curl -X POST https://api.voiceloop.dev/v1/calls/call_abc123/turns \\
+    code: `curl -X POST https://api.koecode.dev/v1/calls/call_abc123/turns \\
   -H "Authorization: Bearer vl_..." \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -140,7 +140,7 @@ export default function CodeSection() {
             A few lines to production
           </h2>
           <p className="text-[16px] text-text-body max-w-lg mx-auto">
-            Integrate VoiceLoop&apos;s intent engine and decision intelligence in minutes.
+            Integrate KoeCode&apos;s intent engine and decision intelligence in minutes.
           </p>
         </motion.div>
 

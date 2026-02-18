@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Trophy, ChevronDown, ArrowUpDown, ExternalLink, Star } from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import { Trophy, ChevronDown, ArrowUpDown, ExternalLink } from 'lucide-react'
 import {
   Radar,
   RadarChart,
@@ -10,20 +10,13 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { Link } from 'react-router-dom'
-import { models, agents } from '../data/mockData'
-import type { Model } from '../data/mockData'
+import { api, type LeaderboardEntry } from '../api/client'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Tier = 'models' | 'agents'
 type Category = 'all' | 'tts' | 'asr' | 's2s' | 'conversational'
-
-const tierLabels: { key: Tier; label: string }[] = [
-  { key: 'models', label: 'Models' },
-  { key: 'agents', label: 'Agents' },
-]
 
 const categoryLabels: { key: Category; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -45,7 +38,6 @@ function pct(n: number): string {
   return `${(n * 100).toFixed(1)}%`
 }
 
-// Normalize a value into 0-100 given min/max of the dataset.
 function normalize(
   value: number,
   min: number,
@@ -73,61 +65,65 @@ interface RadarDimension {
   [modelKey: string]: string | number
 }
 
-function buildRadarData(topModels: Model[]): RadarDimension[] {
-  // Gather ranges for normalization from all models in the dataset
-  const allModels = models.filter(
-    (m) =>
-      m.metrics.utmos !== undefined &&
-      m.metrics.nisqa !== undefined &&
-      m.metrics.wer !== undefined &&
-      m.metrics.ttfb !== undefined &&
-      m.metrics.secs !== undefined,
+function buildRadarData(
+  topEntries: LeaderboardEntry[],
+  allEntries: LeaderboardEntry[],
+): RadarDimension[] {
+  // Need at least some entries with metrics
+  const withMetrics = allEntries.filter(
+    (e) => e.avg_quality != null || e.avg_prosody != null || e.avg_wer != null,
   )
-
-  if (allModels.length === 0) return []
-
-  const utmosVals = allModels.map((m) => m.metrics.utmos)
-  const werVals = allModels.map((m) => m.metrics.wer)
-  const ttfbVals = allModels.map((m) => m.metrics.ttfb)
-  const f0rmseVals = allModels.map((m) => m.metrics.f0rmse ?? 10)
-  const nisqaVals = allModels.map((m) => m.metrics.nisqa)
-  const secsVals = allModels.map((m) => m.metrics.secs)
+  if (withMetrics.length === 0) return []
 
   const dims = [
     {
-      dimension: 'Naturalness',
-      key: 'utmos',
-      vals: utmosVals,
+      dimension: 'ELO Rating',
+      key: 'elo_rating' as const,
       invert: false,
     },
     {
-      dimension: 'Intelligibility',
-      key: 'wer',
-      vals: werVals,
-      invert: true,
+      dimension: 'Win Rate',
+      key: 'win_rate' as const,
+      invert: false,
     },
-    { dimension: 'Latency', key: 'ttfb', vals: ttfbVals, invert: true },
     {
-      dimension: 'Expressiveness',
-      key: 'f0rmse',
-      vals: f0rmseVals,
+      dimension: 'Prosody',
+      key: 'avg_prosody' as const,
+      invert: false,
+    },
+    {
+      dimension: 'Quality',
+      key: 'avg_quality' as const,
+      invert: false,
+    },
+    {
+      dimension: 'Accuracy',
+      key: 'avg_wer' as const,
       invert: true,
     },
-    { dimension: 'Quality', key: 'nisqa', vals: nisqaVals, invert: false },
     {
       dimension: 'Similarity',
-      key: 'secs',
-      vals: secsVals,
+      key: 'avg_semascore' as const,
       invert: false,
     },
   ]
 
   return dims.map((d) => {
-    const min = Math.min(...d.vals)
-    const max = Math.max(...d.vals)
+    const vals = allEntries
+      .map((e) => e[d.key] as number | null)
+      .filter((v): v is number => v != null)
+    if (vals.length === 0) {
+      const row: RadarDimension = { dimension: d.dimension, fullMark: 100 }
+      topEntries.forEach((_, i) => {
+        row[`model${i}`] = 50
+      })
+      return row
+    }
+    const min = Math.min(...vals)
+    const max = Math.max(...vals)
     const row: RadarDimension = { dimension: d.dimension, fullMark: 100 }
-    topModels.forEach((m, i) => {
-      const raw = m.metrics[d.key] ?? (d.invert ? max : min)
+    topEntries.forEach((e, i) => {
+      const raw = (e[d.key] as number | null) ?? (d.invert ? max : min)
       row[`model${i}`] = Math.round(normalize(raw, min, max, d.invert))
     })
     return row
@@ -137,39 +133,6 @@ function buildRadarData(topModels: Model[]): RadarDimension[] {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function TierToggle({
-  active,
-  onChange,
-}: {
-  active: Tier
-  onChange: (t: Tier) => void
-}) {
-  return (
-    <div className="flex items-center gap-1 p-1 rounded-lg bg-bg-surface border border-border-default">
-      {tierLabels.map((t) => (
-        <button
-          key={t.key}
-          onClick={() => onChange(t.key)}
-          className={`relative px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-            active === t.key
-              ? 'text-accent'
-              : 'text-text-body hover:text-text-primary'
-          }`}
-        >
-          {active === t.key && (
-            <motion.div
-              layoutId="tier-pill"
-              className="absolute inset-0 rounded-md bg-accent/10 border border-accent/20"
-              transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-            />
-          )}
-          <span className="relative z-10">{t.label}</span>
-        </button>
-      ))}
-    </div>
-  )
-}
 
 function CategoryPills({
   active,
@@ -201,20 +164,18 @@ function SortButton() {
   return (
     <button className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-text-body rounded-lg border border-border-default hover:text-text-primary hover:border-border-strong transition-colors">
       <ArrowUpDown size={13} />
-      <span className="font-[family-name:var(--font-mono)]">Arena Score</span>
+      <span className="font-[family-name:var(--font-mono)]">ELO Rating</span>
       <ChevronDown size={13} />
     </button>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Model Leaderboard Table
+// Leaderboard Table
 // ---------------------------------------------------------------------------
 
-function ModelTable({ items, tier }: { items: Model[]; tier: Tier }) {
-  const maxScore = Math.max(...items.map((m) => m.arenaScore))
-
-  const isAgent = tier === 'agents'
+function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
+  const maxElo = Math.max(...entries.map((e) => e.elo_rating))
 
   return (
     <div className="bg-bg-surface rounded-xl border border-border-default overflow-hidden">
@@ -223,37 +184,23 @@ function ModelTable({ items, tier }: { items: Model[]; tier: Tier }) {
           <thead>
             <tr className="bg-bg-surface-header text-text-faint font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-wider">
               <th className="text-left pl-5 pr-2 py-3 w-12">#</th>
-              <th className="text-left px-3 py-3">
-                {isAgent ? 'Agent' : 'Model'}
-              </th>
+              <th className="text-left px-3 py-3">Model</th>
               <th className="text-left px-3 py-3">Provider</th>
-              <th className="text-left px-3 py-3">Arena Score</th>
-              {isAgent ? (
-                <>
-                  <th className="text-right px-3 py-3">Task Compl.%</th>
-                  <th className="text-right px-3 py-3">Med. Latency</th>
-                  <th className="text-right px-3 py-3">Barge-in</th>
-                </>
-              ) : (
-                <>
-                  <th className="text-right px-3 py-3">95% CI</th>
-                  <th className="text-right px-3 py-3">Votes</th>
-                </>
-              )}
-              <th className="text-right px-3 pr-5 py-3">Win Rate</th>
+              <th className="text-left px-3 py-3">ELO Rating</th>
+              <th className="text-right px-3 py-3">Battles</th>
+              <th className="text-right px-3 py-3">Win Rate</th>
+              <th className="text-right px-3 py-3">Prosody</th>
+              <th className="text-right px-3 pr-5 py-3">Quality</th>
             </tr>
           </thead>
           <tbody>
-            <AnimatePresence mode="popLayout">
-              {items.map((item, idx) => {
+              {entries.map((entry, idx) => {
                 const rank = idx + 1
-                const ci =
-                  ((item.ciUpper - item.ciLower) / 2).toFixed(1)
-                const barWidth = (item.arenaScore / maxScore) * 100
+                const barWidth = (entry.elo_rating / maxElo) * 100
 
                 return (
                   <motion.tr
-                    key={item.id}
+                    key={entry.model_id}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
@@ -274,16 +221,10 @@ function ModelTable({ items, tier }: { items: Model[]; tier: Tier }) {
                     {/* Name */}
                     <td className="px-3 py-3">
                       <Link
-                        to={`/model/${item.id}`}
+                        to={`/model/${entry.model_id}`}
                         className="inline-flex items-center gap-1.5 text-sm font-medium text-text-primary hover:text-accent transition-colors"
                       >
-                        {item.name}
-                        {item.isOpenSource && (
-                          <Star
-                            size={12}
-                            className="text-accent/60 fill-accent/30"
-                          />
-                        )}
+                        {entry.model_name}
                         <ExternalLink
                           size={11}
                           className="text-text-faint opacity-0 group-hover:opacity-100 transition-opacity"
@@ -292,11 +233,11 @@ function ModelTable({ items, tier }: { items: Model[]; tier: Tier }) {
                     </td>
 
                     {/* Provider */}
-                    <td className="px-3 py-3 text-sm text-text-body">
-                      {item.provider}
+                    <td className="px-3 py-3 text-sm text-text-body capitalize">
+                      {entry.provider}
                     </td>
 
-                    {/* Arena Score with background bar */}
+                    {/* ELO Rating with background bar */}
                     <td className="px-3 py-3">
                       <div className="relative flex items-center">
                         <div
@@ -304,69 +245,57 @@ function ModelTable({ items, tier }: { items: Model[]; tier: Tier }) {
                           style={{ width: `${barWidth}%` }}
                         />
                         <span className="relative z-10 text-sm font-semibold text-text-primary font-[family-name:var(--font-mono)]">
-                          {item.arenaScore}
+                          {Math.round(entry.elo_rating)}
                         </span>
                       </div>
                     </td>
 
-                    {isAgent ? (
-                      <>
-                        {/* Task Completion */}
-                        <td className="px-3 py-3 text-right text-sm font-[family-name:var(--font-mono)] text-text-body">
-                          {item.metrics.taskCompletion ?? '—'}%
-                        </td>
-                        {/* Median Latency */}
-                        <td className="px-3 py-3 text-right text-sm font-[family-name:var(--font-mono)] text-text-body">
-                          {item.metrics.medianLatency ?? '—'}ms
-                        </td>
-                        {/* Barge-in Score */}
-                        <td className="px-3 py-3 text-right text-sm font-[family-name:var(--font-mono)] text-text-body">
-                          {item.metrics.bargeIn != null
-                            ? (item.metrics.bargeIn * 100).toFixed(0) + '%'
-                            : '—'}
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        {/* 95% CI */}
-                        <td className="px-3 py-3 text-right text-sm font-[family-name:var(--font-mono)] text-text-faint">
-                          &plusmn;{ci}
-                        </td>
-                        {/* Votes */}
-                        <td className="px-3 py-3 text-right text-sm font-[family-name:var(--font-mono)] text-text-body">
-                          {formatNumber(item.totalBattles)}
-                        </td>
-                      </>
-                    )}
+                    {/* Battles */}
+                    <td className="px-3 py-3 text-right text-sm font-[family-name:var(--font-mono)] text-text-body">
+                      {formatNumber(entry.total_battles)}
+                    </td>
 
                     {/* Win Rate */}
-                    <td className="px-3 pr-5 py-3">
+                    <td className="px-3 py-3">
                       <div className="flex items-center justify-end gap-2">
                         <div className="w-16 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                           <div
                             className={`h-full rounded-full ${
-                              item.winRate >= 0.6
+                              entry.win_rate >= 0.6
                                 ? 'bg-accent'
                                 : 'bg-text-body'
                             }`}
-                            style={{ width: `${item.winRate * 100}%` }}
+                            style={{ width: `${entry.win_rate * 100}%` }}
                           />
                         </div>
                         <span
                           className={`text-sm font-[family-name:var(--font-mono)] ${
-                            item.winRate >= 0.6
+                            entry.win_rate >= 0.6
                               ? 'text-accent'
                               : 'text-text-body'
                           }`}
                         >
-                          {pct(item.winRate)}
+                          {entry.total_battles > 0 ? pct(entry.win_rate) : '—'}
                         </span>
                       </div>
+                    </td>
+
+                    {/* Prosody */}
+                    <td className="px-3 py-3 text-right text-sm font-[family-name:var(--font-mono)] text-text-body">
+                      {entry.avg_prosody != null
+                        ? entry.avg_prosody.toFixed(2)
+                        : '—'}
+                    </td>
+
+                    {/* Quality */}
+                    <td className="px-3 pr-5 py-3 text-right text-sm font-[family-name:var(--font-mono)] text-text-body">
+                      {entry.avg_quality != null
+                        ? (entry.avg_quality * 5).toFixed(2)
+                        : '—'}
                     </td>
                   </motion.tr>
                 )
               })}
-            </AnimatePresence>
           </tbody>
         </table>
       </div>
@@ -378,8 +307,14 @@ function ModelTable({ items, tier }: { items: Model[]; tier: Tier }) {
 // Radar Comparison Section
 // ---------------------------------------------------------------------------
 
-function RadarComparison({ topModels }: { topModels: Model[] }) {
-  const data = buildRadarData(topModels)
+function RadarComparison({
+  topEntries,
+  allEntries,
+}: {
+  topEntries: LeaderboardEntry[]
+  allEntries: LeaderboardEntry[]
+}) {
+  const data = buildRadarData(topEntries, allEntries)
 
   if (data.length === 0) return null
 
@@ -395,7 +330,7 @@ function RadarComparison({ topModels }: { topModels: Model[] }) {
           Model Comparison
         </h2>
         <p className="text-sm text-text-body mt-1">
-          Select 2-5 models to compare across dimensions
+          Top 3 models compared across dimensions
         </p>
       </div>
 
@@ -418,10 +353,10 @@ function RadarComparison({ topModels }: { topModels: Model[] }) {
                 tick={false}
                 axisLine={false}
               />
-              {topModels.map((_, i) => (
+              {topEntries.map((entry, i) => (
                 <Radar
-                  key={i}
-                  name={topModels[i].name}
+                  key={entry.model_id}
+                  name={entry.model_name}
                   dataKey={`model${i}`}
                   stroke={radarColors[i].stroke}
                   fill={radarColors[i].fill}
@@ -435,148 +370,15 @@ function RadarComparison({ topModels }: { topModels: Model[] }) {
 
         {/* Legend */}
         <div className="flex items-center justify-center gap-6 mt-4">
-          {topModels.map((m, i) => (
-            <div key={m.id} className="flex items-center gap-2">
+          {topEntries.map((entry, i) => (
+            <div key={entry.model_id} className="flex items-center gap-2">
               <span
                 className="w-2.5 h-2.5 rounded-full"
                 style={{ backgroundColor: radarColors[i].stroke }}
               />
-              <span className="text-xs text-text-body">{m.name}</span>
+              <span className="text-xs text-text-body">{entry.model_name}</span>
             </div>
           ))}
-        </div>
-      </div>
-    </motion.section>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Automated Metrics Table
-// ---------------------------------------------------------------------------
-
-function AutomatedMetricsTable({ items }: { items: Model[] }) {
-  // Only show models that have the TTS metrics
-  const metricsModels = items.filter(
-    (m) =>
-      m.metrics.utmos !== undefined &&
-      m.metrics.nisqa !== undefined &&
-      m.metrics.wer !== undefined &&
-      m.metrics.ttfb !== undefined &&
-      m.metrics.secs !== undefined,
-  )
-
-  if (metricsModels.length === 0) return null
-
-  // Find best (min/max) per column
-  const bestUtmos = Math.max(...metricsModels.map((m) => m.metrics.utmos))
-  const bestNisqa = Math.max(...metricsModels.map((m) => m.metrics.nisqa))
-  const bestWer = Math.min(...metricsModels.map((m) => m.metrics.wer))
-  const bestTtfb = Math.min(...metricsModels.map((m) => m.metrics.ttfb))
-  const bestSecs = Math.max(...metricsModels.map((m) => m.metrics.secs))
-
-  return (
-    <motion.section
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.5 }}
-    >
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold text-text-primary font-[family-name:var(--font-display)]">
-          Automated Pipeline Metrics
-        </h2>
-        <p className="text-sm text-text-body mt-1">
-          Objective benchmarks from our automated evaluation pipeline
-        </p>
-      </div>
-
-      <div className="bg-bg-surface rounded-xl border border-border-default overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px]">
-            <thead>
-              <tr className="bg-bg-surface-header text-text-faint font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-wider">
-                <th className="text-left pl-5 px-3 py-3">Model</th>
-                <th className="text-right px-3 py-3">
-                  UTMOS <span className="text-accent/60">&uarr;</span>
-                </th>
-                <th className="text-right px-3 py-3">
-                  NISQA <span className="text-accent/60">&uarr;</span>
-                </th>
-                <th className="text-right px-3 py-3">
-                  WER% <span className="text-red-400/60">&darr;</span>
-                </th>
-                <th className="text-right px-3 py-3">
-                  TTFB ms <span className="text-red-400/60">&darr;</span>
-                </th>
-                <th className="text-right px-3 pr-5 py-3">
-                  SECS <span className="text-accent/60">&uarr;</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {metricsModels.map((m, idx) => (
-                <motion.tr
-                  key={m.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: idx * 0.04, duration: 0.2 }}
-                  className={`border-t border-border-default hover:bg-bg-hover transition-colors ${
-                    idx % 2 === 1 ? 'bg-white/[0.01]' : ''
-                  }`}
-                >
-                  <td className="pl-5 px-3 py-3 text-sm font-medium text-text-primary">
-                    {m.name}
-                  </td>
-                  <td
-                    className={`px-3 py-3 text-right text-sm font-[family-name:var(--font-mono)] ${
-                      m.metrics.utmos === bestUtmos
-                        ? 'text-accent font-semibold'
-                        : 'text-text-body'
-                    }`}
-                  >
-                    {m.metrics.utmos.toFixed(2)}
-                  </td>
-                  <td
-                    className={`px-3 py-3 text-right text-sm font-[family-name:var(--font-mono)] ${
-                      m.metrics.nisqa === bestNisqa
-                        ? 'text-accent font-semibold'
-                        : 'text-text-body'
-                    }`}
-                  >
-                    {m.metrics.nisqa.toFixed(2)}
-                  </td>
-                  <td
-                    className={`px-3 py-3 text-right text-sm font-[family-name:var(--font-mono)] ${
-                      m.metrics.wer === bestWer
-                        ? 'text-accent font-semibold'
-                        : 'text-text-body'
-                    }`}
-                  >
-                    {m.metrics.wer.toFixed(1)}
-                  </td>
-                  <td
-                    className={`px-3 py-3 text-right text-sm font-[family-name:var(--font-mono)] ${
-                      m.metrics.ttfb === bestTtfb
-                        ? 'text-accent font-semibold'
-                        : 'text-text-body'
-                    }`}
-                  >
-                    {m.metrics.ttfb}
-                  </td>
-                  <td
-                    className={`px-3 pr-5 py-3 text-right text-sm font-[family-name:var(--font-mono)] ${
-                      m.metrics.secs === bestSecs
-                        ? 'text-accent font-semibold'
-                        : 'text-text-body'
-                    }`}
-                  >
-                    {m.metrics.secs.toFixed(2)}
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </motion.section>
@@ -588,40 +390,39 @@ function AutomatedMetricsTable({ items }: { items: Model[] }) {
 // ---------------------------------------------------------------------------
 
 export default function LeaderboardPage() {
-  const [activeTier, setActiveTier] = useState<Tier>('models')
   const [activeCategory, setActiveCategory] = useState<Category>('all')
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([])
+  const [loading, setLoading] = useState(true)
 
-  // Filter items based on tier and category
-  const items = useMemo(() => {
-    const source = activeTier === 'models' ? models : agents
-    if (activeCategory === 'all') return source
-
-    const categoryMap: Record<Category, string[]> = {
-      all: [],
-      tts: ['tts'],
-      asr: ['asr'],
-      s2s: ['s2s', 'speech_llm'],
-      conversational: ['agent'],
-    }
-    const types = categoryMap[activeCategory]
-    const filtered = source.filter((m) => types.includes(m.type))
-    return filtered.length > 0 ? filtered : source
-  }, [activeTier, activeCategory])
-
-  // Top 3 models for radar (only when model tier is active)
-  const radarModels = useMemo(() => {
-    return models
-      .filter(
-        (m) =>
-          m.metrics.utmos !== undefined &&
-          m.metrics.nisqa !== undefined &&
-          m.metrics.wer !== undefined &&
-          m.metrics.ttfb !== undefined &&
-          m.metrics.secs !== undefined,
-      )
-      .sort((a, b) => b.arenaScore - a.arenaScore)
-      .slice(0, 3)
+  useEffect(() => {
+    api.leaderboard
+      .current()
+      .then((data) => {
+        setEntries(data)
+      })
+      .catch(() => {
+        // API unavailable — show empty state
+      })
+      .finally(() => setLoading(false))
   }, [])
+
+  // Filter by provider/category if needed
+  const TTS_PROVIDERS = ['cartesia', 'smallestai', 'deepgram']
+  const filtered = useMemo(() => {
+    if (activeCategory === 'all') return entries
+    if (activeCategory === 'tts') {
+      return entries.filter((e) => TTS_PROVIDERS.includes(e.provider))
+    }
+    return entries
+  }, [activeCategory, entries])
+
+  // Top 3 entries with battles for radar
+  const radarEntries = useMemo(() => {
+    return entries
+      .filter((e) => e.total_battles > 0)
+      .sort((a, b) => b.elo_rating - a.elo_rating)
+      .slice(0, 3)
+  }, [entries])
 
   return (
     <main className="min-h-screen bg-bg-primary pb-24">
@@ -637,7 +438,7 @@ export default function LeaderboardPage() {
             Leaderboard
           </h1>
           <p className="text-text-body mt-2 text-base">
-            Multi-dimensional rankings across voice models and agents
+            Live ELO rankings from blind A/B voice battles
           </p>
         </motion.div>
 
@@ -648,16 +449,6 @@ export default function LeaderboardPage() {
           transition={{ duration: 0.35, delay: 0.1 }}
           className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6"
         >
-          <TierToggle
-            active={activeTier}
-            onChange={(t) => {
-              setActiveTier(t)
-              setActiveCategory('all')
-            }}
-          />
-
-          <div className="hidden sm:block w-px h-6 bg-border-default" />
-
           <CategoryPills
             active={activeCategory}
             onChange={setActiveCategory}
@@ -670,26 +461,35 @@ export default function LeaderboardPage() {
 
         {/* ---- Main Leaderboard Table ---- */}
         <motion.div
-          key={activeTier}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
           className="mb-16"
         >
-          <ModelTable items={items} tier={activeTier} />
+          {loading ? (
+            <div className="bg-bg-surface rounded-xl border border-border-default p-12 text-center">
+              <p className="text-text-faint text-sm font-[family-name:var(--font-mono)]">
+                Loading leaderboard...
+              </p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="bg-bg-surface rounded-xl border border-border-default p-12 text-center">
+              <p className="text-text-faint text-sm">
+                No models ranked yet. Start some battles first!
+              </p>
+            </div>
+          ) : (
+            <LeaderboardTable entries={filtered} />
+          )}
         </motion.div>
 
-        {/* ---- Radar Chart — only for models tier ---- */}
-        {activeTier === 'models' && radarModels.length >= 2 && (
+        {/* ---- Radar Chart ---- */}
+        {radarEntries.length >= 2 && (
           <div className="mb-16">
-            <RadarComparison topModels={radarModels} />
-          </div>
-        )}
-
-        {/* ---- Automated Metrics — only for models tier ---- */}
-        {activeTier === 'models' && (
-          <div className="mb-16">
-            <AutomatedMetricsTable items={models} />
+            <RadarComparison
+              topEntries={radarEntries}
+              allEntries={entries}
+            />
           </div>
         )}
       </div>
