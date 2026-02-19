@@ -3,11 +3,8 @@ import { Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 const navLinks = [
-  { label: 'Product', hash: '#features' },
-  { label: 'Solutions', hash: '#demo' },
   { label: 'Voice Arena', href: '/arena/' },
   { label: 'Blog', to: '/blog' },
-  { label: 'Pricing', hash: '#pricing' },
 ];
 
 export default function Navbar() {
@@ -133,7 +130,7 @@ export default function Navbar() {
         {/* ── Right Actions (desktop) ── */}
         <div className="hidden md:flex items-center gap-3 shrink-0">
           <a
-            href="#"
+            href="/arena/"
             className="inline-flex items-center px-4 py-2 text-[13px] font-semibold text-accent border border-accent rounded-lg hover:bg-accent/10 transition-all"
           >
             Start for Free
@@ -165,7 +162,7 @@ export default function Navbar() {
 
               <div className="mt-4 pt-4 border-t border-border-default flex flex-col gap-3">
                 <a
-                  href="#"
+                  href="/arena/"
                   className="block w-full text-center text-sm font-semibold text-accent border border-accent rounded-lg px-4 py-2.5 hover:bg-accent/10 transition-all"
                 >
                   Start for Free
