@@ -299,7 +299,14 @@ def _generate_elevenlabs(text: str, voice_id: str, model_id: str) -> dict:
     start_time = time.perf_counter()
 
     api_key = settings.elevenlabs_api_key
-    print(f"[ELEVENLABS DEBUG] voice={voice_id} key_len={len(api_key)} key_prefix={api_key[:8] if api_key else 'EMPTY'}", flush=True)
+
+    # Debug: test key validity with user endpoint
+    user_resp = _requests.get(
+        "https://api.elevenlabs.io/v1/user",
+        headers={"xi-api-key": api_key},
+        timeout=10,
+    )
+    print(f"[ELEVENLABS DEBUG] user_check status={user_resp.status_code} key_len={len(api_key)}", flush=True)
 
     resp = _requests.post(
         f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
@@ -316,6 +323,7 @@ def _generate_elevenlabs(text: str, voice_id: str, model_id: str) -> dict:
         },
         timeout=30,
     )
+    print(f"[ELEVENLABS DEBUG] tts status={resp.status_code} body={resp.text[:200] if resp.status_code != 200 else 'OK'}", flush=True)
     resp.raise_for_status()
 
     first_byte_time = time.perf_counter()
