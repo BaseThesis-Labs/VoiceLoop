@@ -154,6 +154,7 @@ export default function ArenaLanding() {
         totalModels: summary.total_models,
         totalAgents: 0,
         totalScenarios: summary.total_scenarios,
+        totalVotes: 0,
         uniqueVoters: 0,
         avgBattlesPerVoter: 0,
         interRaterAgreement: 0,

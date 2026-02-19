@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "vercel-build": "cd ../packages/arena && npm install && npm run build && cd ../../frontend && tsc -b && vite build && mkdir -p dist/arena && cp -r ../packages/arena/dist/* dist/arena/",
     "lint": "eslint .",
     "preview": "vite preview"
   },
