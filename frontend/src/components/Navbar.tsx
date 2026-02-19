@@ -8,7 +8,6 @@ const navLinks = [
   { label: 'Voice Arena', href: '/arena/' },
   { label: 'Blog', to: '/blog' },
   { label: 'Pricing', hash: '#pricing' },
-  { label: 'Docs', href: '#' },
 ];
 
 export default function Navbar() {
@@ -135,18 +134,6 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-3 shrink-0">
           <a
             href="#"
-            className="text-[13px] font-medium text-text-body hover:text-text-primary transition-colors"
-          >
-            Contact Sales
-          </a>
-          <a
-            href="#"
-            className="inline-flex items-center px-4 py-2 text-[13px] font-medium text-text-body border border-border-strong rounded-lg hover:text-text-primary hover:border-text-faint transition-all"
-          >
-            Sign in
-          </a>
-          <a
-            href="#"
             className="inline-flex items-center px-4 py-2 text-[13px] font-semibold text-accent border border-accent rounded-lg hover:bg-accent/10 transition-all"
           >
             Start for Free
@@ -177,18 +164,6 @@ export default function Navbar() {
               )}
 
               <div className="mt-4 pt-4 border-t border-border-default flex flex-col gap-3">
-                <a
-                  href="#"
-                  className="text-sm font-medium text-text-body hover:text-text-primary transition-colors py-2"
-                >
-                  Contact Sales
-                </a>
-                <a
-                  href="#"
-                  className="text-center text-sm font-medium text-text-body border border-border-strong rounded-lg px-4 py-2.5 hover:text-text-primary hover:border-text-faint transition-all"
-                >
-                  Sign in
-                </a>
                 <a
                   href="#"
                   className="block w-full text-center text-sm font-semibold text-accent border border-accent rounded-lg px-4 py-2.5 hover:bg-accent/10 transition-all"

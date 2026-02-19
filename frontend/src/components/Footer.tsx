@@ -1,32 +1,23 @@
 import { Github, Twitter, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const footerLinks = [
-  {
-    title: 'Product',
-    links: ['Features', 'Pricing', 'Changelog', 'Roadmap'],
-  },
-  {
-    title: 'Developers',
-    links: ['Documentation', 'API Reference', 'SDKs', 'Status'],
-  },
-  {
-    title: 'Company',
-    links: ['About', 'Blog', 'Careers', 'Contact'],
-  },
-];
-
 export default function Footer() {
   return (
-    <footer className="relative">
+    <footer
+      className="relative bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: "url('/footer.png')" }}
+    >
+      {/* Dark overlay to match hero background intensity */}
+      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+
       {/* CTA Card Section */}
-      <div className="max-w-[1280px] mx-auto px-6 py-24">
+      <div className="relative z-10 max-w-[1280px] mx-auto px-6 py-24">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, ease: 'easeOut' }}
-          className="rounded-2xl border border-border-default bg-bg-surface overflow-hidden relative"
+          className="rounded-2xl border border-border-default bg-bg-surface/90 backdrop-blur-sm overflow-hidden relative"
         >
           {/* Aurora gradient background */}
           <div
@@ -55,80 +46,61 @@ export default function Footer() {
               >
                 Start for Free
               </a>
-              <a
-                href="#"
-                className="px-7 py-3.5 border border-border-strong text-text-body rounded-lg font-medium text-sm hover:text-text-primary hover:border-text-faint transition"
-              >
-                Talk to Sales
-              </a>
             </div>
           </div>
         </motion.div>
       </div>
 
-      {/* Footer Links Section */}
-      <div className="max-w-[1280px] mx-auto px-6 pb-16">
-        <div className="border-t border-border-default pt-12">
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-8">
-            {/* Column 1: Brand */}
-            <div className="col-span-2">
-              <p className="text-[15px] font-semibold text-text-primary mb-4">
+      {/* Footer Bottom Section */}
+      <div className="relative z-10 max-w-[1280px] mx-auto px-6 pb-16">
+        <div className="border-t border-white/10 pt-12">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+            {/* Brand */}
+            <div className="flex flex-col items-center sm:items-start gap-4">
+              <p className="text-[15px] font-semibold text-white">
                 KoeCode
               </p>
-              <p className="text-[13px] text-text-body leading-relaxed mb-5 max-w-[260px]">
+              <p className="text-[13px] text-white/60 leading-relaxed max-w-[260px] text-center sm:text-left">
                 The intelligence layer for production voice AI.
               </p>
               <div className="flex items-center gap-3">
-                <a href="#" className="text-text-faint hover:text-text-body transition-colors">
+                <a href="#" className="text-white/40 hover:text-white/70 transition-colors">
                   <Github size={16} />
                 </a>
-                <a href="#" className="text-text-faint hover:text-text-body transition-colors">
+                <a href="#" className="text-white/40 hover:text-white/70 transition-colors">
                   <Twitter size={16} />
                 </a>
               </div>
+            </div>
 
-              {/* Newsletter input */}
-              <div className="mt-5 flex flex-row">
+            {/* Newsletter */}
+            <div className="flex flex-col items-center sm:items-end gap-3">
+              <p className="text-[12px] font-[family-name:var(--font-mono)] uppercase tracking-wider text-white/50">
+                Stay updated
+              </p>
+              <div className="flex flex-row">
                 <input
                   type="email"
                   placeholder="Your email"
-                  className="bg-bg-hover border border-border-default rounded-l-lg px-3 py-2 text-[13px] text-text-primary placeholder-text-faint w-48 focus:outline-none focus:border-border-strong"
+                  className="bg-white/10 border border-white/15 rounded-l-lg px-3 py-2 text-[13px] text-white placeholder-white/40 w-48 focus:outline-none focus:border-white/30 backdrop-blur-sm"
                 />
                 <button className="bg-accent text-bg-primary px-3 py-2 rounded-r-lg text-[13px] font-medium hover:bg-accent/90 transition">
                   <ArrowRight size={14} />
                 </button>
               </div>
             </div>
-
-            {/* Link columns */}
-            {footerLinks.map((group) => (
-              <div key={group.title}>
-                <h4 className="text-[12px] font-semibold text-text-body font-[family-name:var(--font-mono)] uppercase tracking-wider mb-4">
-                  {group.title}
-                </h4>
-                <ul className="space-y-3">
-                  {group.links.map((link) => (
-                    <li key={link}>
-                      <a href="#" className="text-[13px] text-text-body hover:text-text-primary transition-colors">
-                        {link}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
           </div>
 
           {/* Bottom bar */}
-          <div className="mt-10 pt-8 border-t border-border-default flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-[12px] text-text-faint">
+          <div className="mt-10 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-[12px] text-white/40">
               &copy; 2026 KoeCode. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
-              <a href="#" className="text-[12px] text-text-faint hover:text-text-body transition-colors">
+              <a href="#" className="text-[12px] text-white/40 hover:text-white/60 transition-colors">
                 Privacy
               </a>
-              <a href="#" className="text-[12px] text-text-faint hover:text-text-body transition-colors">
+              <a href="#" className="text-[12px] text-white/40 hover:text-white/60 transition-colors">
                 Terms
               </a>
             </div>
