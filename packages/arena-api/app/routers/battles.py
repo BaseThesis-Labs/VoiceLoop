@@ -68,7 +68,21 @@ async def generate_battle(db: AsyncSession = Depends(get_db)):
         tts_tasks.append(
             loop.run_in_executor(None, generate_tts, prompt.text, model.provider, voice_id, tts_model_id)
         )
-    tts_results = await asyncio.gather(*tts_tasks)
+    raw_results = await asyncio.gather(*tts_tasks, return_exceptions=True)
+
+    # Filter out failed providers
+    ok_models = []
+    tts_results = []
+    for model, result in zip(selected, raw_results):
+        if isinstance(result, Exception):
+            logger.error("TTS failed for %s/%s: %s", model.provider, model.name, result)
+            continue
+        ok_models.append(model)
+        tts_results.append(result)
+    selected = ok_models
+
+    if len(selected) < 2:
+        raise HTTPException(status_code=500, detail="TTS generation failed for too many providers")
 
     # 4. Create Evaluation records
     evals = []

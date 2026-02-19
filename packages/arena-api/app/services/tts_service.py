@@ -303,7 +303,6 @@ def _generate_elevenlabs(text: str, voice_id: str, model_id: str) -> dict:
         headers={
             "xi-api-key": settings.elevenlabs_api_key,
             "Content-Type": "application/json",
-            "Accept": "audio/wav",
         },
         json={
             "text": text,
