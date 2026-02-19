@@ -7,7 +7,7 @@ COPY pyproject.toml ./
 RUN pip install --no-cache-dir .
 
 # Install TTS provider SDKs (lazy-loaded, needed for battles)
-RUN pip install --no-cache-dir cartesia smallestai
+RUN pip install --no-cache-dir cartesia smallestai elevenlabs
 
 COPY . .
 RUN mkdir -p /app/uploads

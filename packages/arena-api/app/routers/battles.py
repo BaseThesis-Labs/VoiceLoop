@@ -18,10 +18,12 @@ logger = logging.getLogger("arena.battles")
 
 router = APIRouter(prefix="/api/v1/battles", tags=["battles"])
 
+PROVIDERS = ["cartesia", "elevenlabs", "smallestai", "deepgram"]
+
 
 @router.post("/generate", response_model=BattleGenerateResponse)
 async def generate_battle(db: AsyncSession = Depends(get_db)):
-    """Generate a new battle: pick random prompt + 2 voices, generate TTS, create records."""
+    """Generate a new 4-model battle: pick random prompt + 1 voice per provider, generate TTS."""
     # 1. Pick random prompt
     prompt_count = (await db.execute(select(func.count(Prompt.id)))).scalar_one()
     if prompt_count == 0:
@@ -29,78 +31,63 @@ async def generate_battle(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Prompt).offset(random.randint(0, prompt_count - 1)).limit(1))
     prompt = result.scalar_one()
 
-    # 2. Pick 2 random distinct voice models from different providers
+    # 2. Pick one random model from each provider
     all_models_result = await db.execute(
         select(VoiceModel)
         .where(VoiceModel.config_json.isnot(None))
-        .order_by(func.random())
     )
     all_models = all_models_result.scalars().all()
-    if len(all_models) < 2:
-        raise HTTPException(status_code=500, detail="Need at least 2 models with voice config. Run seed.py first.")
 
-    # Try to pick models from different providers for cross-provider comparison
-    model_a = all_models[0]
-    model_b = None
-    for m in all_models[1:]:
-        if m.provider != model_a.provider:
-            model_b = m
-            break
-    # Fallback: if only one provider exists, pick any different model
-    if model_b is None:
-        model_b = all_models[1]
+    # Group by provider
+    by_provider: dict[str, list] = {}
+    for m in all_models:
+        by_provider.setdefault(m.provider, []).append(m)
 
-    # 3. Generate TTS for each voice
+    # Pick one from each available provider
+    selected = []
+    for provider in PROVIDERS:
+        models = by_provider.get(provider, [])
+        if models:
+            selected.append(random.choice(models))
+
+    if len(selected) < 2:
+        raise HTTPException(status_code=500, detail="Need models from at least 2 providers. Run seed.py first.")
+
+    # Shuffle so position doesn't reveal provider
+    random.shuffle(selected)
+
+    # Pad labels: positions are a, b, c, d
+    labels = ["a", "b", "c", "d"]
+
+    # 3. Generate TTS for all models in parallel
     loop = asyncio.get_event_loop()
-    voice_id_a = model_a.config_json.get("voice_id")
-    voice_id_b = model_b.config_json.get("voice_id")
-    tts_model_id_a = model_a.config_json.get("model_id", "sonic-2024-12-12")
-    tts_model_id_b = model_b.config_json.get("model_id", "sonic-2024-12-12")
-    provider_a = model_a.provider
-    provider_b = model_b.provider
-
-    tts_a, tts_b = await asyncio.gather(
-        loop.run_in_executor(None, generate_tts, prompt.text, provider_a, voice_id_a, tts_model_id_a),
-        loop.run_in_executor(None, generate_tts, prompt.text, provider_b, voice_id_b, tts_model_id_b),
-    )
+    tts_tasks = []
+    for model in selected:
+        voice_id = model.config_json.get("voice_id")
+        tts_model_id = model.config_json.get("model_id", "sonic-3")
+        tts_tasks.append(
+            loop.run_in_executor(None, generate_tts, prompt.text, model.provider, voice_id, tts_model_id)
+        )
+    tts_results = await asyncio.gather(*tts_tasks)
 
     # 4. Create Evaluation records
-    eval_a = Evaluation(
-        model_id=model_a.id,
-        status="pending",
-        audio_path=tts_a["audio_path"],
-        transcript_ref=prompt.text,
-        duration_seconds=tts_a["duration_seconds"],
-    )
-    eval_b = Evaluation(
-        model_id=model_b.id,
-        status="pending",
-        audio_path=tts_b["audio_path"],
-        transcript_ref=prompt.text,
-        duration_seconds=tts_b["duration_seconds"],
-    )
-    db.add(eval_a)
-    db.add(eval_b)
+    evals = []
+    for i, model in enumerate(selected):
+        ev = Evaluation(
+            model_id=model.id,
+            status="pending",
+            audio_path=tts_results[i]["audio_path"],
+            transcript_ref=prompt.text,
+            duration_seconds=tts_results[i]["duration_seconds"],
+        )
+        db.add(ev)
+        evals.append(ev)
     await db.flush()
 
     # 5. Create Battle record
-    battle = Battle(
-        scenario_id=(await db.execute(
-            select(Prompt.scenario_id).where(Prompt.id == prompt.id)
-        )).scalar_one() or (await db.execute(
-            select(VoiceModel.id).limit(1)  # fallback — use first scenario
-        )).scalar_one(),
-        model_a_id=model_a.id,
-        model_b_id=model_b.id,
-        eval_a_id=eval_a.id,
-        eval_b_id=eval_b.id,
-    )
-
-    # Handle scenario_id: use prompt's scenario or pick a random one
     from app.models.scenario import Scenario
-    if prompt.scenario_id:
-        battle.scenario_id = prompt.scenario_id
-    else:
+    scenario_id = prompt.scenario_id
+    if not scenario_id:
         scenario_result = await db.execute(
             select(Scenario.id).where(Scenario.category == prompt.category).limit(1)
         )
@@ -108,8 +95,18 @@ async def generate_battle(db: AsyncSession = Depends(get_db)):
         if not scenario_id:
             scenario_result = await db.execute(select(Scenario.id).limit(1))
             scenario_id = scenario_result.scalar_one()
-        battle.scenario_id = scenario_id
 
+    battle = Battle(
+        scenario_id=scenario_id,
+        model_a_id=selected[0].id,
+        model_b_id=selected[1].id,
+        model_c_id=selected[2].id if len(selected) > 2 else None,
+        model_d_id=selected[3].id if len(selected) > 3 else None,
+        eval_a_id=evals[0].id,
+        eval_b_id=evals[1].id,
+        eval_c_id=evals[2].id if len(evals) > 2 else None,
+        eval_d_id=evals[3].id if len(evals) > 3 else None,
+    )
     db.add(battle)
     await db.commit()
     await db.refresh(battle)
@@ -117,31 +114,51 @@ async def generate_battle(db: AsyncSession = Depends(get_db)):
     # 6. Kick off background evals
     try:
         from app.services.eval_service import submit_evaluation
-        asyncio.create_task(submit_evaluation(eval_a.id))
-        asyncio.create_task(submit_evaluation(eval_b.id))
+        for ev in evals:
+            asyncio.create_task(submit_evaluation(ev.id))
     except Exception as e:
         logger.warning("Background eval failed to start: %s", e)
 
-    # 7. Return response
-    return BattleGenerateResponse(
+    # 7. Build response
+    resp = BattleGenerateResponse(
         id=battle.id,
         prompt_text=prompt.text,
         prompt_category=prompt.category,
-        audio_a_url=f"/api/v1/audio/{tts_a['filename']}",
-        audio_b_url=f"/api/v1/audio/{tts_b['filename']}",
-        model_a_id=model_a.id,
-        model_b_id=model_b.id,
-        model_a_name=model_a.name,
-        model_b_name=model_b.name,
-        provider_a=provider_a,
-        provider_b=provider_b,
-        eval_a_id=eval_a.id,
-        eval_b_id=eval_b.id,
-        duration_a=tts_a["duration_seconds"],
-        duration_b=tts_b["duration_seconds"],
-        ttfb_a=tts_a["ttfb_ms"],
-        ttfb_b=tts_b["ttfb_ms"],
+        audio_a_url=f"/api/v1/audio/{tts_results[0]['filename']}",
+        audio_b_url=f"/api/v1/audio/{tts_results[1]['filename']}",
+        model_a_id=selected[0].id,
+        model_b_id=selected[1].id,
+        model_a_name=selected[0].name,
+        model_b_name=selected[1].name,
+        provider_a=selected[0].provider,
+        provider_b=selected[1].provider,
+        eval_a_id=evals[0].id,
+        eval_b_id=evals[1].id,
+        duration_a=tts_results[0]["duration_seconds"],
+        duration_b=tts_results[1]["duration_seconds"],
+        ttfb_a=tts_results[0]["ttfb_ms"],
+        ttfb_b=tts_results[1]["ttfb_ms"],
     )
+
+    if len(selected) > 2:
+        resp.audio_c_url = f"/api/v1/audio/{tts_results[2]['filename']}"
+        resp.model_c_id = selected[2].id
+        resp.model_c_name = selected[2].name
+        resp.provider_c = selected[2].provider
+        resp.eval_c_id = evals[2].id
+        resp.duration_c = tts_results[2]["duration_seconds"]
+        resp.ttfb_c = tts_results[2]["ttfb_ms"]
+
+    if len(selected) > 3:
+        resp.audio_d_url = f"/api/v1/audio/{tts_results[3]['filename']}"
+        resp.model_d_id = selected[3].id
+        resp.model_d_name = selected[3].name
+        resp.provider_d = selected[3].provider
+        resp.eval_d_id = evals[3].id
+        resp.duration_d = tts_results[3]["duration_seconds"]
+        resp.ttfb_d = tts_results[3]["ttfb_ms"]
+
+    return resp
 
 
 @router.post("", response_model=BattleResponse, status_code=201)
@@ -170,6 +187,7 @@ async def list_battles(
     if model_id:
         stmt = stmt.where(
             (Battle.model_a_id == model_id) | (Battle.model_b_id == model_id)
+            | (Battle.model_c_id == model_id) | (Battle.model_d_id == model_id)
         )
     result = await db.execute(stmt)
     return result.scalars().all()
@@ -194,30 +212,75 @@ async def vote_battle(
         raise HTTPException(status_code=404, detail="Battle not found")
     if battle.winner is not None:
         raise HTTPException(status_code=400, detail="Battle already resolved")
-    if body.winner not in ("a", "b", "tie"):
-        raise HTTPException(status_code=400, detail="winner must be 'a', 'b', or 'tie'")
 
-    model_a = (await db.execute(select(VoiceModel).where(VoiceModel.id == battle.model_a_id))).scalar_one()
-    model_b = (await db.execute(select(VoiceModel).where(VoiceModel.id == battle.model_b_id))).scalar_one()
+    valid_choices = {"a", "b", "tie", "all_bad"}
+    if battle.model_c_id:
+        valid_choices.add("c")
+    if battle.model_d_id:
+        valid_choices.add("d")
+    if body.winner not in valid_choices:
+        raise HTTPException(status_code=400, detail=f"winner must be one of {valid_choices}")
 
-    new_a, new_b, delta = update_elo(model_a.elo_rating, model_b.elo_rating, body.winner)
-    model_a.elo_rating = new_a
-    model_a.total_battles += 1
-    model_b.elo_rating = new_b
-    model_b.total_battles += 1
+    # Collect all participating models
+    model_ids = [battle.model_a_id, battle.model_b_id]
+    if battle.model_c_id:
+        model_ids.append(battle.model_c_id)
+    if battle.model_d_id:
+        model_ids.append(battle.model_d_id)
 
-    if body.winner == "a":
-        total_wins_a = round(model_a.win_rate * (model_a.total_battles - 1)) + 1
-        model_a.win_rate = total_wins_a / model_a.total_battles
-        model_b.win_rate = round(model_b.win_rate * (model_b.total_battles - 1)) / model_b.total_battles
-    elif body.winner == "b":
-        model_a.win_rate = round(model_a.win_rate * (model_a.total_battles - 1)) / model_a.total_battles
-        total_wins_b = round(model_b.win_rate * (model_b.total_battles - 1)) + 1
-        model_b.win_rate = total_wins_b / model_b.total_battles
+    models_result = await db.execute(
+        select(VoiceModel).where(VoiceModel.id.in_(model_ids))
+    )
+    models_map = {m.id: m for m in models_result.scalars().all()}
+
+    label_to_id = {"a": battle.model_a_id, "b": battle.model_b_id}
+    if battle.model_c_id:
+        label_to_id["c"] = battle.model_c_id
+    if battle.model_d_id:
+        label_to_id["d"] = battle.model_d_id
+
+    if body.winner not in ("tie", "all_bad"):
+        # Winner gets ELO boost vs each loser (pairwise updates)
+        winner_id = label_to_id[body.winner]
+        winner_model = models_map[winner_id]
+        total_delta = 0.0
+
+        for label, mid in label_to_id.items():
+            if label == body.winner:
+                continue
+            loser_model = models_map[mid]
+            new_w, new_l, delta = update_elo(winner_model.elo_rating, loser_model.elo_rating, "a")
+            winner_model.elo_rating = new_w
+            loser_model.elo_rating = new_l
+            loser_model.total_battles += 1
+            loser_model.win_rate = round(loser_model.win_rate * (loser_model.total_battles - 1)) / loser_model.total_battles
+            total_delta += delta
+
+        winner_model.total_battles += 1
+        total_wins = round(winner_model.win_rate * (winner_model.total_battles - 1)) + 1
+        winner_model.win_rate = total_wins / winner_model.total_battles
+        battle.elo_delta = total_delta
+    elif body.winner == "tie":
+        # Tie: pairwise tie updates between all pairs
+        ids = list(label_to_id.values())
+        for i in range(len(ids)):
+            for j in range(i + 1, len(ids)):
+                m_i = models_map[ids[i]]
+                m_j = models_map[ids[j]]
+                new_i, new_j, _ = update_elo(m_i.elo_rating, m_j.elo_rating, "tie")
+                m_i.elo_rating = new_i
+                m_j.elo_rating = new_j
+        for mid in ids:
+            models_map[mid].total_battles += 1
+        battle.elo_delta = 0.0
+    # all_bad: no ELO changes, just increment battle counts
+    else:
+        for mid in label_to_id.values():
+            models_map[mid].total_battles += 1
+        battle.elo_delta = 0.0
 
     battle.winner = body.winner
     battle.vote_source = "human"
-    battle.elo_delta = delta
 
     await db.commit()
     await db.refresh(battle)

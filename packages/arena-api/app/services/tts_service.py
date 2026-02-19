@@ -1,4 +1,4 @@
-"""TTS service supporting multiple providers (Cartesia, SmallestAI, Deepgram)."""
+"""TTS service supporting multiple providers (Cartesia, SmallestAI, Deepgram, ElevenLabs)."""
 import logging
 import os
 import struct
@@ -55,6 +55,8 @@ def generate_tts(text: str, provider: str, voice_id: str, model_id: str) -> dict
         return _generate_smallestai(text, voice_id, model_id)
     elif provider == "deepgram":
         return _generate_deepgram(text, voice_id, model_id)
+    elif provider == "elevenlabs":
+        return _generate_elevenlabs(text, voice_id, model_id)
     else:
         raise ValueError(f"Unknown TTS provider: {provider}")
 
@@ -263,6 +265,85 @@ def _generate_deepgram(text: str, voice_id: str, model_id: str) -> dict:
     logger.info(
         "Generated TTS [deepgram]: model=%s duration=%.2fs ttfb=%.0fms total=%.0fms",
         deepgram_model, duration_seconds, ttfb_ms, generation_time_ms,
+    )
+
+    return {
+        "audio_path": audio_path,
+        "filename": filename,
+        "duration_seconds": round(duration_seconds, 2),
+        "ttfb_ms": round(ttfb_ms, 1),
+        "generation_time_ms": round(generation_time_ms, 1),
+    }
+
+
+# ---------------------------------------------------------------------------
+# ElevenLabs implementation
+# ---------------------------------------------------------------------------
+def _generate_elevenlabs(text: str, voice_id: str, model_id: str) -> dict:
+    """Generate TTS audio using ElevenLabs REST API and save as WAV.
+
+    Uses the v1 text-to-speech endpoint with PCM output, then wraps in WAV.
+    """
+    import requests as _requests
+
+    os.makedirs(settings.audio_storage_path, exist_ok=True)
+
+    filename = f"{uuid.uuid4()}.wav"
+    audio_path = os.path.join(settings.audio_storage_path, filename)
+
+    sample_rate = 24000
+    num_channels = 1
+    bits_per_sample = 16
+    bytes_per_sample = bits_per_sample // 8
+
+    start_time = time.perf_counter()
+
+    resp = _requests.post(
+        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+        headers={
+            "xi-api-key": settings.elevenlabs_api_key,
+            "Content-Type": "application/json",
+            "Accept": "audio/wav",
+        },
+        json={
+            "text": text,
+            "model_id": model_id,
+        },
+        params={
+            "output_format": "pcm_24000",
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+
+    first_byte_time = time.perf_counter()
+    audio_bytes = resp.content
+
+    # Wrap raw PCM data in a WAV container
+    data_size = len(audio_bytes)
+    wav_header = _build_wav_header(
+        data_size=data_size,
+        sample_rate=sample_rate,
+        num_channels=num_channels,
+        bits_per_sample=bits_per_sample,
+    )
+
+    with open(audio_path, "wb") as f:
+        f.write(wav_header)
+        f.write(audio_bytes)
+
+    end_time = time.perf_counter()
+
+    # Duration: 16-bit mono at 24000 Hz
+    file_size = os.path.getsize(audio_path)
+    duration_seconds = (file_size - 44) / (bytes_per_sample * sample_rate)
+
+    ttfb_ms = (first_byte_time - start_time) * 1000
+    generation_time_ms = (end_time - start_time) * 1000
+
+    logger.info(
+        "Generated TTS [elevenlabs]: voice=%s duration=%.2fs ttfb=%.0fms total=%.0fms",
+        voice_id, duration_seconds, ttfb_ms, generation_time_ms,
     )
 
     return {

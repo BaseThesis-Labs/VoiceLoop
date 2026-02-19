@@ -4,8 +4,6 @@ import {
   Play,
   Pause,
   Shuffle,
-  ChevronDown,
-  ChevronUp,
   HelpCircle,
   Share2,
   ArrowRight,
@@ -18,30 +16,33 @@ import WaveformVisualizer from '../components/WaveformVisualizer'
 import { api, type GeneratedBattle } from '../api/client'
 
 // ---- Types ----
-type VoteChoice = 'a' | 'b' | 'tie' | 'both_bad' | null
-type PlayingState = 'a' | 'b' | null
-type DimensionRating = 0 | 1 | 2 | 3 | 4
+type ModelLabel = 'a' | 'b' | 'c' | 'd'
+type VoteChoice = ModelLabel | 'all_bad' | null
+type PlayingState = ModelLabel | null
 
 // ---- Constants ----
-const COLOR_A = '#6366f1'
-const COLOR_B = '#f59e0b'
+const COLORS: Record<ModelLabel, string> = {
+  a: '#6366f1', // indigo
+  b: '#f59e0b', // amber
+  c: '#10b981', // emerald
+  d: '#ec4899', // pink
+}
 
-const DIMENSIONS = ['Naturalness', 'Clarity', 'Expressiveness', 'Pacing'] as const
+const LABEL_NAMES: Record<ModelLabel, string> = {
+  a: 'Model A',
+  b: 'Model B',
+  c: 'Model C',
+  d: 'Model D',
+}
 
 // ---- Component ----
 export default function BattlePage() {
   const [playing, setPlaying] = useState<PlayingState>(null)
   const [voted, setVoted] = useState<VoteChoice>(null)
-  const [showDimensions, setShowDimensions] = useState(false)
   const [revealed, setRevealed] = useState(false)
-  const [dimensions, setDimensions] = useState<Record<string, DimensionRating>>({
-    Naturalness: 2,
-    Clarity: 2,
-    Expressiveness: 2,
-    Pacing: 2,
+  const [hasPlayed, setHasPlayed] = useState<Record<ModelLabel, boolean>>({
+    a: false, b: false, c: false, d: false,
   })
-  const [hasPlayedA, setHasPlayedA] = useState(false)
-  const [hasPlayedB, setHasPlayedB] = useState(false)
 
   // API state
   const [battle, setBattle] = useState<GeneratedBattle | null>(null)
@@ -51,10 +52,24 @@ export default function BattlePage() {
   const [voting, setVoting] = useState(false)
 
   // Audio refs + progress
-  const audioARef = useRef<HTMLAudioElement>(null)
-  const audioBRef = useRef<HTMLAudioElement>(null)
-  const [progressA, setProgressA] = useState(0)
-  const [progressB, setProgressB] = useState(0)
+  const audioRefs = {
+    a: useRef<HTMLAudioElement>(null),
+    b: useRef<HTMLAudioElement>(null),
+    c: useRef<HTMLAudioElement>(null),
+    d: useRef<HTMLAudioElement>(null),
+  }
+  const [progress, setProgress] = useState<Record<ModelLabel, number>>({
+    a: 0, b: 0, c: 0, d: 0,
+  })
+
+  // Which models are present in this battle
+  const activeModels: ModelLabel[] = battle
+    ? (['a', 'b'] as ModelLabel[])
+        .concat(battle.audio_c_url ? ['c'] : [])
+        .concat(battle.audio_d_url ? ['d'] : [])
+    : []
+
+  const allPlayed = activeModels.every((m) => hasPlayed[m])
 
   const loadBattle = useCallback(async () => {
     setLoading(true)
@@ -77,74 +92,68 @@ export default function BattlePage() {
 
   // Audio event handlers
   useEffect(() => {
-    const audioA = audioARef.current
-    const audioB = audioBRef.current
-    if (!audioA || !audioB) return
+    const labels: ModelLabel[] = ['a', 'b', 'c', 'd']
+    const cleanups: (() => void)[] = []
 
-    const onTimeUpdateA = () => {
-      if (audioA.duration) setProgressA(audioA.currentTime / audioA.duration)
-    }
-    const onTimeUpdateB = () => {
-      if (audioB.duration) setProgressB(audioB.currentTime / audioB.duration)
-    }
-    const onEndedA = () => {
-      setPlaying((p) => (p === 'a' ? null : p))
-      setProgressA(1)
-    }
-    const onEndedB = () => {
-      setPlaying((p) => (p === 'b' ? null : p))
-      setProgressB(1)
+    for (const label of labels) {
+      const audio = audioRefs[label].current
+      if (!audio) continue
+
+      const onTimeUpdate = () => {
+        if (audio.duration) {
+          setProgress((p) => ({ ...p, [label]: audio.currentTime / audio.duration }))
+        }
+      }
+      const onEnded = () => {
+        setPlaying((p) => (p === label ? null : p))
+        setProgress((p) => ({ ...p, [label]: 1 }))
+      }
+
+      audio.addEventListener('timeupdate', onTimeUpdate)
+      audio.addEventListener('ended', onEnded)
+      cleanups.push(() => {
+        audio.removeEventListener('timeupdate', onTimeUpdate)
+        audio.removeEventListener('ended', onEnded)
+      })
     }
 
-    audioA.addEventListener('timeupdate', onTimeUpdateA)
-    audioB.addEventListener('timeupdate', onTimeUpdateB)
-    audioA.addEventListener('ended', onEndedA)
-    audioB.addEventListener('ended', onEndedB)
-
-    return () => {
-      audioA.removeEventListener('timeupdate', onTimeUpdateA)
-      audioB.removeEventListener('timeupdate', onTimeUpdateB)
-      audioA.removeEventListener('ended', onEndedA)
-      audioB.removeEventListener('ended', onEndedB)
-    }
+    return () => cleanups.forEach((fn) => fn())
   }, [battle])
 
-  function handlePlay(model: 'a' | 'b') {
-    const audioA = audioARef.current
-    const audioB = audioBRef.current
-    if (!audioA || !audioB) return
+  function getAudioUrl(label: ModelLabel): string | null {
+    if (!battle) return null
+    if (label === 'a') return battle.audio_a_url
+    if (label === 'b') return battle.audio_b_url
+    if (label === 'c') return battle.audio_c_url ?? null
+    if (label === 'd') return battle.audio_d_url ?? null
+    return null
+  }
+
+  function handlePlay(model: ModelLabel) {
+    const allAudios = (['a', 'b', 'c', 'd'] as ModelLabel[]).map((l) => audioRefs[l].current)
 
     if (playing === model) {
-      // Pause current
-      if (model === 'a') audioA.pause()
-      else audioB.pause()
+      audioRefs[model].current?.pause()
       setPlaying(null)
     } else {
-      // Pause the other, play this one
-      if (model === 'a') {
-        audioB.pause()
-        audioA.play()
-        setHasPlayedA(true)
-      } else {
-        audioA.pause()
-        audioB.play()
-        setHasPlayedB(true)
-      }
+      // Pause all others
+      allAudios.forEach((a) => a?.pause())
+      audioRefs[model].current?.play()
+      setHasPlayed((p) => ({ ...p, [model]: true }))
       setPlaying(model)
     }
   }
 
   async function handleVote(choice: VoteChoice) {
-    if (!battle || !choice || choice === 'both_bad') {
-      // "both_bad" is recorded locally only (no winner)
-      setVoted(choice)
-      setRevealed(true)
-      return
-    }
+    if (!battle || !choice) return
+
     setVoting(true)
     try {
-      const winner = choice === 'tie' ? 'tie' : choice
-      await api.battles.vote(battle.id, winner)
+      if (choice === 'all_bad') {
+        await api.battles.vote(battle.id, 'all_bad')
+      } else {
+        await api.battles.vote(battle.id, choice)
+      }
     } catch {
       // Vote failed silently — still reveal
     }
@@ -152,9 +161,10 @@ export default function BattlePage() {
     setRevealed(true)
     setVoting(false)
 
-    // Stop audio on vote
-    audioARef.current?.pause()
-    audioBRef.current?.pause()
+    // Stop all audio on vote
+    for (const label of ['a', 'b', 'c', 'd'] as ModelLabel[]) {
+      audioRefs[label].current?.pause()
+    }
     setPlaying(null)
   }
 
@@ -162,32 +172,37 @@ export default function BattlePage() {
     setPlaying(null)
     setVoted(null)
     setRevealed(false)
-    setShowDimensions(false)
-    setHasPlayedA(false)
-    setHasPlayedB(false)
-    setProgressA(0)
-    setProgressB(0)
-    setDimensions({ Naturalness: 2, Clarity: 2, Expressiveness: 2, Pacing: 2 })
+    setHasPlayed({ a: false, b: false, c: false, d: false })
+    setProgress({ a: 0, b: 0, c: 0, d: 0 })
     window.scrollTo({ top: 0, behavior: 'smooth' })
     loadBattle()
   }
 
-  const bothPlayed = hasPlayedA && hasPlayedB
+  function getModelInfo(label: ModelLabel) {
+    if (!battle) return { name: '', provider: '', duration: 0, ttfb: 0 }
+    const map: Record<ModelLabel, { name: string; provider: string; duration: number; ttfb: number }> = {
+      a: { name: battle.model_a_name, provider: battle.provider_a, duration: battle.duration_a, ttfb: battle.ttfb_a },
+      b: { name: battle.model_b_name, provider: battle.provider_b, duration: battle.duration_b, ttfb: battle.ttfb_b },
+      c: { name: battle.model_c_name ?? '', provider: battle.provider_c ?? '', duration: battle.duration_c ?? 0, ttfb: battle.ttfb_c ?? 0 },
+      d: { name: battle.model_d_name ?? '', provider: battle.provider_d ?? '', duration: battle.duration_d ?? 0, ttfb: battle.ttfb_d ?? 0 },
+    }
+    return map[label]
+  }
 
   return (
     <div className="min-h-screen bg-bg-primary pb-24">
-      <div className="max-w-4xl mx-auto px-6 pt-10">
+      <div className="max-w-5xl mx-auto px-6 pt-10">
         {/* Hidden audio elements */}
         {battle && (
           <>
-            <audio ref={audioARef} src={battle.audio_a_url} preload="auto" />
-            <audio ref={audioBRef} src={battle.audio_b_url} preload="auto" />
+            <audio ref={audioRefs.a} src={battle.audio_a_url} preload="auto" />
+            <audio ref={audioRefs.b} src={battle.audio_b_url} preload="auto" />
+            {battle.audio_c_url && <audio ref={audioRefs.c} src={battle.audio_c_url} preload="auto" />}
+            {battle.audio_d_url && <audio ref={audioRefs.d} src={battle.audio_d_url} preload="auto" />}
           </>
         )}
 
-        {/* ================================ */}
-        {/* Header Bar                       */}
-        {/* ================================ */}
+        {/* Header Bar */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <h1 className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.2em] text-text-faint">
@@ -206,9 +221,7 @@ export default function BattlePage() {
           </div>
         </div>
 
-        {/* ================================ */}
-        {/* Loading State                    */}
-        {/* ================================ */}
+        {/* Loading State */}
         {loading && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -220,14 +233,12 @@ export default function BattlePage() {
               Generating battle audio...
             </p>
             <p className="text-text-faint text-xs font-[family-name:var(--font-mono)] mt-1">
-              This takes 2-5 seconds
+              This takes 3-8 seconds for 4 models
             </p>
           </motion.div>
         )}
 
-        {/* ================================ */}
-        {/* Error State                      */}
-        {/* ================================ */}
+        {/* Error State */}
         {error && !loading && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -247,9 +258,7 @@ export default function BattlePage() {
           </motion.div>
         )}
 
-        {/* ================================ */}
-        {/* Battle Content                   */}
-        {/* ================================ */}
+        {/* Battle Content */}
         {battle && !loading && !error && (
           <>
             {/* Prompt Card */}
@@ -278,30 +287,23 @@ export default function BattlePage() {
               </div>
             </div>
 
-            {/* Dual Audio Players */}
+            {/* 4-Model Audio Grid (2x2) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <AudioPlayerCard
-                label="Model A"
-                provider={battle.provider_a}
-                color={COLOR_A}
-                isPlaying={playing === 'a'}
-                hasPlayed={hasPlayedA}
-                onTogglePlay={() => handlePlay('a')}
-                duration={`${battle.duration_a.toFixed(1)}s`}
-                ttfb={`${Math.round(battle.ttfb_a)}ms`}
-                progress={progressA}
-              />
-              <AudioPlayerCard
-                label="Model B"
-                provider={battle.provider_b}
-                color={COLOR_B}
-                isPlaying={playing === 'b'}
-                hasPlayed={hasPlayedB}
-                onTogglePlay={() => handlePlay('b')}
-                duration={`${battle.duration_b.toFixed(1)}s`}
-                ttfb={`${Math.round(battle.ttfb_b)}ms`}
-                progress={progressB}
-              />
+              {activeModels.map((label) => (
+                <AudioPlayerCard
+                  key={label}
+                  label={LABEL_NAMES[label]}
+                  color={COLORS[label]}
+                  isPlaying={playing === label}
+                  hasPlayed={hasPlayed[label]}
+                  onTogglePlay={() => handlePlay(label)}
+                  duration={`${getModelInfo(label).duration.toFixed(1)}s`}
+                  ttfb={`${Math.round(getModelInfo(label).ttfb)}ms`}
+                  progress={progress[label]}
+                  revealed={revealed}
+                  provider={revealed ? getModelInfo(label).provider : undefined}
+                />
+              ))}
             </div>
 
             {/* Vote Panel */}
@@ -316,88 +318,35 @@ export default function BattlePage() {
                   className="bg-bg-surface rounded-xl border border-border-default p-6 mb-4"
                 >
                   <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.2em] text-text-faint text-center mb-5">
-                    {voting ? 'Submitting vote...' : 'Vote'}
+                    {voting ? 'Submitting vote...' : 'Which voice sounds best?'}
                   </p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="flex flex-wrap justify-center gap-3">
+                    {activeModels.map((label) => (
+                      <VoteButton
+                        key={label}
+                        label={`${LABEL_NAMES[label].split(' ')[1]} is best`}
+                        active={voted === label}
+                        color={COLORS[label]}
+                        disabled={!allPlayed || voting}
+                        onClick={() => handleVote(label)}
+                      />
+                    ))}
                     <VoteButton
-                      label="A is better"
-                      active={voted === 'a'}
-                      color={COLOR_A}
-                      variant="a"
-                      disabled={!bothPlayed || voting}
-                      onClick={() => handleVote('a')}
-                    />
-                    <VoteButton
-                      label="Tie"
-                      active={voted === 'tie'}
-                      color="#888899"
-                      variant="tie"
-                      disabled={!bothPlayed || voting}
-                      onClick={() => handleVote('tie')}
-                    />
-                    <VoteButton
-                      label="B is better"
-                      active={voted === 'b'}
-                      color={COLOR_B}
-                      variant="b"
-                      disabled={!bothPlayed || voting}
-                      onClick={() => handleVote('b')}
-                    />
-                    <VoteButton
-                      label="Both bad"
-                      active={voted === 'both_bad'}
+                      label="All bad"
+                      active={voted === 'all_bad'}
                       color="#ef4444"
-                      variant="both_bad"
-                      disabled={!bothPlayed || voting}
-                      onClick={() => handleVote('both_bad')}
+                      disabled={!allPlayed || voting}
+                      onClick={() => handleVote('all_bad')}
                     />
                   </div>
-                  {!bothPlayed && (
+                  {!allPlayed && (
                     <p className="text-center text-text-faint text-xs mt-4 font-[family-name:var(--font-mono)]">
-                      Listen to both models before voting
+                      Listen to all {activeModels.length} models before voting
                     </p>
                   )}
                 </motion.div>
               ) : null}
             </AnimatePresence>
-
-            {/* Dimension Ratings (Optional) */}
-            {!revealed && (
-              <div className="bg-bg-surface rounded-xl border border-border-default overflow-hidden mb-6">
-                <button
-                  onClick={() => setShowDimensions(!showDimensions)}
-                  className="w-full flex items-center justify-between px-6 py-4 text-sm text-text-body hover:text-text-primary transition-colors"
-                >
-                  <span>Rate dimensions (optional)</span>
-                  {showDimensions ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </button>
-                <AnimatePresence>
-                  {showDimensions && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.25, ease: 'easeInOut' }}
-                      className="overflow-hidden"
-                    >
-                      <div className="px-6 pb-6 pt-2 space-y-5 border-t border-border-default">
-                        {DIMENSIONS.map((dim) => (
-                          <DimensionScale
-                            key={dim}
-                            label={dim}
-                            value={dimensions[dim]}
-                            onChange={(v) => setDimensions((d) => ({ ...d, [dim]: v }))}
-                          />
-                        ))}
-                        <p className="text-[11px] text-text-faint font-[family-name:var(--font-mono)] text-center pt-1">
-                          Left = A better &middot; Center = Tie &middot; Right = B better
-                        </p>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )}
 
             {/* Post-Vote Reveal */}
             <AnimatePresence>
@@ -419,50 +368,60 @@ export default function BattlePage() {
                       </p>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <motion.div
-                          initial={{ opacity: 0, x: -12 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.2 }}
-                          className="flex items-center gap-3 px-4 py-3 rounded-lg bg-bg-hover border border-border-default"
-                        >
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLOR_A }} />
-                          <div>
-                            <p className="text-xs text-text-faint font-[family-name:var(--font-mono)]">Model A</p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-text-primary font-medium text-sm">{battle.model_a_name}</p>
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-[family-name:var(--font-mono)] uppercase tracking-wider bg-accent/10 text-accent">
-                                {battle.provider_a}
-                              </span>
-                            </div>
-                          </div>
-                        </motion.div>
-
-                        <motion.div
-                          initial={{ opacity: 0, x: 12 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.3 }}
-                          className="flex items-center gap-3 px-4 py-3 rounded-lg bg-bg-hover border border-border-default"
-                        >
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLOR_B }} />
-                          <div>
-                            <p className="text-xs text-text-faint font-[family-name:var(--font-mono)]">Model B</p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-text-primary font-medium text-sm">{battle.model_b_name}</p>
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-[family-name:var(--font-mono)] uppercase tracking-wider bg-accent/10 text-accent">
-                                {battle.provider_b}
-                              </span>
-                            </div>
-                          </div>
-                        </motion.div>
+                        {activeModels.map((label, idx) => {
+                          const info = getModelInfo(label)
+                          const isWinner = voted === label
+                          return (
+                            <motion.div
+                              key={label}
+                              initial={{ opacity: 0, x: idx % 2 === 0 ? -12 : 12 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: 0.2 + idx * 0.1 }}
+                              className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${
+                                isWinner
+                                  ? 'bg-accent/10 border-accent/40'
+                                  : 'bg-bg-hover border-border-default'
+                              }`}
+                            >
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: COLORS[label] }}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-text-faint font-[family-name:var(--font-mono)]">
+                                  {LABEL_NAMES[label]}
+                                  {isWinner && (
+                                    <span className="ml-2 text-accent">Winner</span>
+                                  )}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-text-primary font-medium text-sm truncate">
+                                    {info.name}
+                                  </p>
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-[family-name:var(--font-mono)] uppercase tracking-wider bg-accent/10 text-accent shrink-0">
+                                    {info.provider}
+                                  </span>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )
+                        })}
                       </div>
 
                       {/* Your vote */}
                       <div className="text-center mb-6">
                         <span className="text-xs text-text-faint font-[family-name:var(--font-mono)]">Your vote: </span>
-                        <span className="text-sm font-medium" style={{
-                          color: voted === 'a' ? COLOR_A : voted === 'b' ? COLOR_B : voted === 'both_bad' ? '#ef4444' : '#888899',
-                        }}>
-                          {voted === 'a' ? 'A is better' : voted === 'b' ? 'B is better' : voted === 'tie' ? 'Tie' : 'Both bad'}
+                        <span
+                          className="text-sm font-medium"
+                          style={{
+                            color: voted === 'all_bad' ? '#ef4444' : voted ? COLORS[voted] : '#888899',
+                          }}
+                        >
+                          {voted === 'all_bad'
+                            ? 'All bad'
+                            : voted
+                              ? `${LABEL_NAMES[voted].split(' ')[1]} is best`
+                              : 'None'}
                         </span>
                       </div>
 
@@ -476,52 +435,73 @@ export default function BattlePage() {
                           Performance
                         </p>
                         <div className="rounded-lg border border-border-default overflow-hidden">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="bg-bg-hover">
-                                <th className="text-left px-4 py-2.5 text-text-faint font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-wider font-normal">
-                                  Metric
-                                </th>
-                                <th className="text-right px-4 py-2.5 text-text-faint font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-wider font-normal">
-                                  <span className="inline-flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLOR_A }} />
-                                    Model A
-                                  </span>
-                                </th>
-                                <th className="text-right px-4 py-2.5 text-text-faint font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-wider font-normal">
-                                  <span className="inline-flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLOR_B }} />
-                                    Model B
-                                  </span>
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {[
-                                { label: 'TTFB', a: `${Math.round(battle.ttfb_a)}ms`, b: `${Math.round(battle.ttfb_b)}ms`, aBetter: battle.ttfb_a < battle.ttfb_b },
-                                { label: 'Duration', a: `${battle.duration_a.toFixed(1)}s`, b: `${battle.duration_b.toFixed(1)}s`, aBetter: false },
-                              ].map((row, idx) => (
-                                <tr
-                                  key={row.label}
-                                  className={idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-hover/50'}
-                                >
-                                  <td className="px-4 py-2.5 text-text-body font-[family-name:var(--font-mono)] text-xs">
-                                    {row.label}
-                                  </td>
-                                  <td className={`px-4 py-2.5 text-right font-[family-name:var(--font-mono)] text-xs ${
-                                    row.aBetter ? 'text-accent font-semibold' : 'text-text-body'
-                                  }`}>
-                                    {row.a}
-                                  </td>
-                                  <td className={`px-4 py-2.5 text-right font-[family-name:var(--font-mono)] text-xs ${
-                                    !row.aBetter && row.label === 'TTFB' ? 'text-accent font-semibold' : 'text-text-body'
-                                  }`}>
-                                    {row.b}
-                                  </td>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="bg-bg-hover">
+                                  <th className="text-left px-4 py-2.5 text-text-faint font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-wider font-normal">
+                                    Metric
+                                  </th>
+                                  {activeModels.map((label) => (
+                                    <th
+                                      key={label}
+                                      className="text-right px-4 py-2.5 text-text-faint font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-wider font-normal"
+                                    >
+                                      <span className="inline-flex items-center gap-1.5">
+                                        <span
+                                          className="w-2 h-2 rounded-full"
+                                          style={{ backgroundColor: COLORS[label] }}
+                                        />
+                                        {LABEL_NAMES[label].split(' ')[1]}
+                                      </span>
+                                    </th>
+                                  ))}
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody>
+                                {(() => {
+                                  const ttfbs = activeModels.map((l) => getModelInfo(l).ttfb)
+                                  const minTtfb = Math.min(...ttfbs)
+                                  return (
+                                    <>
+                                      <tr className="bg-bg-surface">
+                                        <td className="px-4 py-2.5 text-text-body font-[family-name:var(--font-mono)] text-xs">
+                                          TTFB
+                                        </td>
+                                        {activeModels.map((label) => {
+                                          const ttfb = getModelInfo(label).ttfb
+                                          const isBest = ttfb === minTtfb
+                                          return (
+                                            <td
+                                              key={label}
+                                              className={`px-4 py-2.5 text-right font-[family-name:var(--font-mono)] text-xs ${
+                                                isBest ? 'text-accent font-semibold' : 'text-text-body'
+                                              }`}
+                                            >
+                                              {Math.round(ttfb)}ms
+                                            </td>
+                                          )
+                                        })}
+                                      </tr>
+                                      <tr className="bg-bg-hover/50">
+                                        <td className="px-4 py-2.5 text-text-body font-[family-name:var(--font-mono)] text-xs">
+                                          Duration
+                                        </td>
+                                        {activeModels.map((label) => (
+                                          <td
+                                            key={label}
+                                            className="px-4 py-2.5 text-right font-[family-name:var(--font-mono)] text-xs text-text-body"
+                                          >
+                                            {getModelInfo(label).duration.toFixed(1)}s
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    </>
+                                  )
+                                })()}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       </motion.div>
 
@@ -559,11 +539,10 @@ export default function BattlePage() {
 }
 
 // ============================================================
-// AudioPlayerCard
+// AudioPlayerCard — blind mode (no provider shown before reveal)
 // ============================================================
 function AudioPlayerCard({
   label,
-  provider,
   color,
   isPlaying,
   hasPlayed,
@@ -571,9 +550,10 @@ function AudioPlayerCard({
   duration,
   ttfb,
   progress,
+  revealed,
+  provider,
 }: {
   label: string
-  provider: string
   color: string
   isPlaying: boolean
   hasPlayed: boolean
@@ -581,6 +561,8 @@ function AudioPlayerCard({
   duration: string
   ttfb: string
   progress: number
+  revealed: boolean
+  provider?: string
 }) {
   return (
     <motion.div
@@ -598,9 +580,11 @@ function AudioPlayerCard({
         <span className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.15em] text-text-faint">
           {label}
         </span>
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-[family-name:var(--font-mono)] uppercase tracking-wider bg-accent/10 text-accent">
-          {provider}
-        </span>
+        {revealed && provider && (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-[family-name:var(--font-mono)] uppercase tracking-wider bg-accent/10 text-accent">
+            {provider}
+          </span>
+        )}
         {isPlaying && (
           <motion.span
             initial={{ opacity: 0 }}
@@ -695,7 +679,6 @@ function VoteButton({
   label: string
   active: boolean
   color: string
-  variant: 'a' | 'b' | 'tie' | 'both_bad'
   disabled: boolean
   onClick: () => void
 }) {
@@ -728,54 +711,5 @@ function VoteButton({
       )}
       <span className="relative z-10">{label}</span>
     </motion.button>
-  )
-}
-
-// ============================================================
-// DimensionScale
-// ============================================================
-function DimensionScale({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: DimensionRating
-  onChange: (v: DimensionRating) => void
-}) {
-  const dotLabels = ['A++', 'A+', 'Tie', 'B+', 'B++']
-  return (
-    <div className="flex items-center gap-4">
-      <span className="text-xs text-text-body w-28 shrink-0">{label}</span>
-      <div className="flex-1 flex items-center justify-center gap-3">
-        {[0, 1, 2, 3, 4].map((i) => {
-          const isActive = value === i
-          const dotColor =
-            i < 2 ? COLOR_A : i > 2 ? COLOR_B : '#888899'
-          return (
-            <button
-              key={i}
-              onClick={() => onChange(i as DimensionRating)}
-              className="group relative flex flex-col items-center gap-1.5"
-            >
-              <motion.div
-                whileHover={{ scale: 1.3 }}
-                whileTap={{ scale: 0.85 }}
-                className="w-4 h-4 rounded-full border-2 transition-all"
-                style={{
-                  borderColor: isActive ? dotColor : '#282A3A',
-                  backgroundColor: isActive ? dotColor : 'transparent',
-                  boxShadow: isActive ? `0 0 8px ${dotColor}40` : 'none',
-                }}
-              />
-              <span className="text-[9px] font-[family-name:var(--font-mono)] text-text-faint opacity-0 group-hover:opacity-100 transition-opacity absolute -bottom-4">
-                {dotLabels[i]}
-              </span>
-            </button>
-          )
-        })}
-      </div>
-      <div className="w-28 shrink-0" />
-    </div>
   )
 }

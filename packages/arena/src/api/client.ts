@@ -108,6 +108,21 @@ export interface GeneratedBattle {
   duration_b: number;
   ttfb_a: number;
   ttfb_b: number;
+  // 4-model battle fields
+  audio_c_url?: string | null;
+  audio_d_url?: string | null;
+  model_c_id?: string | null;
+  model_d_id?: string | null;
+  model_c_name?: string | null;
+  model_d_name?: string | null;
+  provider_c?: string | null;
+  provider_d?: string | null;
+  eval_c_id?: string | null;
+  eval_d_id?: string | null;
+  duration_c?: number | null;
+  duration_d?: number | null;
+  ttfb_c?: number | null;
+  ttfb_d?: number | null;
 }
 
 export interface TTSGenerateRequest {
@@ -173,7 +188,7 @@ export const api = {
     get: (id: string) => request<Battle>(`/battles/${id}`),
     create: (data: { scenario_id: string; model_a_id: string; model_b_id: string }) =>
       request<Battle>('/battles', { method: 'POST', body: JSON.stringify(data) }),
-    vote: (battleId: string, winner: 'a' | 'b' | 'tie') =>
+    vote: (battleId: string, winner: 'a' | 'b' | 'c' | 'd' | 'tie' | 'all_bad') =>
       request<Battle>(`/battles/${battleId}/vote`, {
         method: 'POST',
         body: JSON.stringify({ winner }),

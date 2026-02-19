@@ -9,7 +9,7 @@ class BattleCreate(BaseModel):
 
 
 class BattleVote(BaseModel):
-    winner: str  # "a", "b", or "tie"
+    winner: str  # "a", "b", "c", "d", "tie", or "all_bad"
 
 
 class BattleResponse(BaseModel):
@@ -17,8 +17,12 @@ class BattleResponse(BaseModel):
     scenario_id: str
     model_a_id: str
     model_b_id: str
+    model_c_id: str | None = None
+    model_d_id: str | None = None
     eval_a_id: str | None
     eval_b_id: str | None
+    eval_c_id: str | None = None
+    eval_d_id: str | None = None
     winner: str | None
     vote_source: str | None
     elo_delta: float | None
@@ -45,3 +49,18 @@ class BattleGenerateResponse(BaseModel):
     duration_b: float
     ttfb_a: float
     ttfb_b: float
+    # 4-model battle fields (optional for backward compat)
+    audio_c_url: str | None = None
+    audio_d_url: str | None = None
+    model_c_id: str | None = None
+    model_d_id: str | None = None
+    model_c_name: str | None = None
+    model_d_name: str | None = None
+    provider_c: str | None = None
+    provider_d: str | None = None
+    eval_c_id: str | None = None
+    eval_d_id: str | None = None
+    duration_c: float | None = None
+    duration_d: float | None = None
+    ttfb_c: float | None = None
+    ttfb_d: float | None = None

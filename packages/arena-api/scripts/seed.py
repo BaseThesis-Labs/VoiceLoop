@@ -226,6 +226,62 @@ MODELS = [
             "accent": "british",
         },
     },
+    # ElevenLabs Turbo v2.5 voices
+    {
+        "name": "Rachel - Warm Narrator",
+        "provider": "elevenlabs",
+        "version": "turbo-v2.5",
+        "config_json": {
+            "voice_id": "21m00Tcm4TlvDq8ikWAM",
+            "model_id": "eleven_turbo_v2_5",
+            "description": "Warm female voice for narration and conversational use",
+            "gender": "female",
+        },
+    },
+    {
+        "name": "Josh - Deep Speaker",
+        "provider": "elevenlabs",
+        "version": "turbo-v2.5",
+        "config_json": {
+            "voice_id": "TxGEqnHWrfWFTfGW9XjX",
+            "model_id": "eleven_turbo_v2_5",
+            "description": "Deep male voice for narration and support",
+            "gender": "male",
+        },
+    },
+    {
+        "name": "Bella - Soft Speaker",
+        "provider": "elevenlabs",
+        "version": "turbo-v2.5",
+        "config_json": {
+            "voice_id": "EXAVITQu4vr4xnSDxMaL",
+            "model_id": "eleven_turbo_v2_5",
+            "description": "Soft female voice for gentle conversations",
+            "gender": "female",
+        },
+    },
+    {
+        "name": "Antoni - Crisp Talker",
+        "provider": "elevenlabs",
+        "version": "turbo-v2.5",
+        "config_json": {
+            "voice_id": "ErXwobaYiN019PkySvjV",
+            "model_id": "eleven_turbo_v2_5",
+            "description": "Crisp male voice for clear communication",
+            "gender": "male",
+        },
+    },
+    {
+        "name": "Elli - Young Voice",
+        "provider": "elevenlabs",
+        "version": "turbo-v2.5",
+        "config_json": {
+            "voice_id": "MF3mGyEYCl7XYWbV9V6O",
+            "model_id": "eleven_turbo_v2_5",
+            "description": "Young female voice for casual and friendly interactions",
+            "gender": "female",
+        },
+    },
     # Deepgram Aura-2 voices
     {
         "name": "Thalia - Warm Speaker",

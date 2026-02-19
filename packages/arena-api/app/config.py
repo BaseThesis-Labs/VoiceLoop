@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     cartesia_api_key: str = ""
     smallest_api_key: str = ""
     deepgram_api_key: str = ""
+    elevenlabs_api_key: str = ""
     enable_diarization: bool = True
     default_num_speakers: int = 2
     api_host: str = "0.0.0.0"
