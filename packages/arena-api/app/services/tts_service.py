@@ -299,7 +299,7 @@ def _generate_elevenlabs(text: str, voice_id: str, model_id: str) -> dict:
     start_time = time.perf_counter()
 
     api_key = settings.elevenlabs_api_key
-    logger.info("ElevenLabs request: voice=%s key_len=%d key_prefix=%s", voice_id, len(api_key), api_key[:8] if api_key else "EMPTY")
+    print(f"[ELEVENLABS DEBUG] voice={voice_id} key_len={len(api_key)} key_prefix={api_key[:8] if api_key else 'EMPTY'}", flush=True)
 
     resp = _requests.post(
         f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
