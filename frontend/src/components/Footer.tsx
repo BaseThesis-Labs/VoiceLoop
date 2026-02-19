@@ -1,5 +1,4 @@
 import { Github, Twitter, ArrowRight } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 export default function Footer() {
   return (
@@ -9,47 +8,6 @@ export default function Footer() {
     >
       {/* Dark overlay to match hero background intensity */}
       <div className="absolute inset-0 bg-black/40 pointer-events-none" />
-
-      {/* CTA Card Section */}
-      <div className="relative z-10 max-w-[1280px] mx-auto px-6 py-24">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, ease: 'easeOut' }}
-          className="rounded-2xl border border-border-default bg-bg-surface/90 backdrop-blur-sm overflow-hidden relative"
-        >
-          {/* Aurora gradient background */}
-          <div
-            className="absolute inset-0 pointer-events-none"
-            aria-hidden="true"
-            style={{
-              background: `
-                radial-gradient(ellipse 600px 350px at 50% 0%, rgba(45, 212, 168, 0.08), transparent),
-                radial-gradient(ellipse 400px 250px at 30% 80%, rgba(6, 182, 212, 0.05), transparent)
-              `,
-            }}
-          />
-
-          {/* Content */}
-          <div className="relative z-10 text-center px-8 sm:px-16 py-16 sm:py-24">
-            <h2 className="font-[family-name:var(--font-display)] text-3xl lg:text-4xl text-text-primary tracking-[-0.01em] mb-4">
-              Start building intelligent voice agents
-            </h2>
-            <p className="text-[16px] text-text-body mb-10 max-w-md mx-auto">
-              Free to start. Scale as you grow. No credit card required.
-            </p>
-            <div className="flex flex-row items-center justify-center gap-4">
-              <a
-                href="#"
-                className="px-7 py-3.5 bg-accent text-bg-primary rounded-lg font-semibold text-sm hover:shadow-[0_0_24px_rgba(45,212,168,0.2)] transition"
-              >
-                Start for Free
-              </a>
-            </div>
-          </div>
-        </motion.div>
-      </div>
 
       {/* Footer Bottom Section */}
       <div className="relative z-10 max-w-[1280px] mx-auto px-6 pb-16">
