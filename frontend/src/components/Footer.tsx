@@ -6,8 +6,8 @@ export default function Footer() {
       className="relative bg-cover bg-center bg-no-repeat"
       style={{ backgroundImage: "url('/footer.png')" }}
     >
-      {/* Dark overlay to match hero background intensity */}
-      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+      {/* Dark overlay for text readability over light image */}
+      <div className="absolute inset-0 bg-black/70 pointer-events-none" />
 
       {/* Footer Bottom Section */}
       <div className="relative z-10 max-w-[1280px] mx-auto px-6 pb-16">
