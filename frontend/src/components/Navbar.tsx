@@ -48,7 +48,7 @@ export default function Navbar() {
     onClick?: () => void,
   ) {
     const href = resolveHref(link);
-    const isRouterLink = href.startsWith('/') && !href.startsWith('/#');
+    const isRouterLink = href.startsWith('/') && !href.startsWith('/#') && !href.startsWith('/arena');
 
     if (isRouterLink) {
       return (
