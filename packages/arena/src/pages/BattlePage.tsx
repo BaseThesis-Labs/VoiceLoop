@@ -120,15 +120,6 @@ export default function BattlePage() {
     return () => cleanups.forEach((fn) => fn())
   }, [battle])
 
-  function getAudioUrl(label: ModelLabel): string | null {
-    if (!battle) return null
-    if (label === 'a') return battle.audio_a_url
-    if (label === 'b') return battle.audio_b_url
-    if (label === 'c') return battle.audio_c_url ?? null
-    if (label === 'd') return battle.audio_d_url ?? null
-    return null
-  }
-
   function handlePlay(model: ModelLabel) {
     const allAudios = (['a', 'b', 'c', 'd'] as ModelLabel[]).map((l) => audioRefs[l].current)
 
