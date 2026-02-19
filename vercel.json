@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/api/v1/:path*", "destination": "https://arena-api-production-964b.up.railway.app/api/v1/:path*" },
+    { "source": "/arena", "destination": "/arena/index.html" },
+    { "source": "/arena/:path*", "destination": "/arena/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
