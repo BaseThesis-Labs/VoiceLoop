@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { models as mockModels } from '../data/mockData'
 import WaveformVisualizer from '../components/WaveformVisualizer'
-import { api, type Model as ApiModel, type TTSGenerateResponse } from '../api/client'
+import { api, type TTSGenerateResponse } from '../api/client'
 
 // ---- Types ----
 type Mode = 'voice' | 'tts' | 'metrics'

@@ -1,5 +1,7 @@
 {
   "rewrites": [
+    { "source": "/arena", "destination": "/arena/index.html" },
+    { "source": "/arena/:path*", "destination": "/arena/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
