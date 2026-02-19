@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -11,7 +12,7 @@ class Settings(BaseSettings):
     default_num_speakers: int = 2
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
+    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174", "https://koecode.io", "https://www.koecode.io"]
     max_eval_workers: int = 2
     max_upload_size_mb: int = 50
     elo_k_factor: int = 32
@@ -19,6 +20,13 @@ class Settings(BaseSettings):
     audio_storage_path: str = "./uploads"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @model_validator(mode="after")
+    def fix_async_db_url(self):
+        # Railway provides DATABASE_URL as postgresql:// but asyncpg needs postgresql+asyncpg://
+        if self.database_url.startswith("postgresql://"):
+            self.database_url = self.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return self
 
 
 settings = Settings()
