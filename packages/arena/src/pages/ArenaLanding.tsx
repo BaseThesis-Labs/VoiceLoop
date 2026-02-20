@@ -311,7 +311,7 @@ export default function ArenaLanding() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-0 md:divide-x md:divide-border-default">
             {[
               { icon: Swords, value: arenaStats.totalBattles, label: 'Total Battles' },
-              { icon: Trophy, value: arenaStats.totalModels, label: 'Models Ranked' },
+              { icon: Trophy, value: arenaStats.totalModels, label: 'Voices Ranked' },
               { icon: Users, value: arenaStats.totalAgents, label: 'Agents Ranked' },
               { icon: BarChart3, value: arenaStats.totalScenarios, label: 'Active Scenarios' },
             ].map((stat) => (
