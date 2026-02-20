@@ -1,7 +1,38 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { ArrowRight, Loader2, Check } from 'lucide-react';
 import VoxelBird from './VoxelBird';
 
 export default function Hero() {
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  async function handleWaitlist(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setStatus('loading');
+    setErrorMsg('');
+    try {
+      const res = await fetch('/api/v1/subscribers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), source: 'hero_waitlist' }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.detail || 'Failed to join waitlist');
+      }
+      setStatus('success');
+      setEmail('');
+      setTimeout(() => setStatus('idle'), 3000);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Something went wrong');
+      setStatus('error');
+      setTimeout(() => setStatus('idle'), 3000);
+    }
+  }
+
   return (
     <section
       className="relative overflow-hidden min-h-screen -mt-[88px] pt-[88px] bg-cover bg-center bg-no-repeat"
@@ -49,19 +80,39 @@ export default function Hero() {
               </p>
 
               {/* CTAs */}
-              <div className="flex flex-row items-center gap-4">
-                <a
-                  href="#"
-                  className="px-7 py-3.5 bg-accent text-[#0F172A] rounded-lg font-semibold text-sm hover:shadow-[0_0_24px_rgba(45,212,168,0.4)] transition-all duration-300"
-                >
-                  Start for Free
-                </a>
-                <a
-                  href="#"
-                  className="px-7 py-3.5 border border-white/30 text-white rounded-lg font-medium text-sm hover:bg-white/10 hover:border-white/50 transition-all duration-300"
-                >
-                  Contact Sales
-                </a>
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-row items-center gap-4">
+                  <a
+                    href="/arena/"
+                    className="px-7 py-3.5 bg-accent text-[#0F172A] rounded-lg font-semibold text-sm hover:shadow-[0_0_24px_rgba(45,212,168,0.4)] transition-all duration-300"
+                  >
+                    Start for Free
+                  </a>
+                  <form onSubmit={handleWaitlist} className="flex flex-row">
+                    <input
+                      type="email"
+                      placeholder="Your email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="bg-white/10 border border-white/20 rounded-l-lg px-4 py-3 text-sm text-white placeholder-white/40 w-52 focus:outline-none focus:border-white/40 backdrop-blur-sm"
+                      disabled={status === 'loading'}
+                    />
+                    <button
+                      type="submit"
+                      disabled={status === 'loading' || status === 'success'}
+                      className="bg-white/15 border border-white/20 border-l-0 text-white px-4 py-3 rounded-r-lg text-sm font-medium hover:bg-white/25 transition disabled:opacity-60"
+                    >
+                      {status === 'loading' ? <Loader2 size={16} className="animate-spin" /> :
+                       status === 'success' ? <Check size={16} /> :
+                       <ArrowRight size={16} />}
+                    </button>
+                  </form>
+                </div>
+                <p className="text-[12px] text-white/50">
+                  Join the waitlist to get beta access to harness!
+                  {status === 'success' && <span className="text-accent ml-2">You're on the list!</span>}
+                  {status === 'error' && <span className="text-red-400 ml-2">{errorMsg}</span>}
+                </p>
               </div>
             </motion.div>
           </div>

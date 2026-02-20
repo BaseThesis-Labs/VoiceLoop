@@ -11,7 +11,6 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
-  const isHome = location.pathname === '/';
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -34,7 +33,6 @@ export default function Navbar() {
 
   function resolveHref(link: (typeof navLinks)[number]): string {
     if (link.to) return link.to;
-    if (link.hash) return isHome ? link.hash : `/${link.hash}`;
     return link.href ?? '#';
   }
 
