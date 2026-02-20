@@ -52,7 +52,7 @@ function BlogCard({
             <img
               src={post.image}
               alt={post.title}
-              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700"
+              className="w-full h-full object-cover object-top group-hover:scale-[1.02] transition-transform duration-700"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-bg-surface via-bg-surface/20 to-transparent" style={{ top: '40%' }} />
           </div>
