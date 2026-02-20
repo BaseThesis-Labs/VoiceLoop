@@ -14,7 +14,7 @@ import {
   Zap,
   Equal,
 } from 'lucide-react'
-import { recentBattles as mockBattles, arenaStats as mockStats, models, agents, scenarios } from '../data/mockData'
+import { recentBattles as mockBattles, arenaStats as mockStats } from '../data/mockData'
 import WaveformVisualizer from '../components/WaveformVisualizer'
 import AuroraGradient from '../components/AuroraGradient'
 import { api } from '../api/client'
@@ -235,30 +235,6 @@ export default function ArenaLanding() {
             </Link>
           </motion.div>
 
-          {/* Stats row */}
-          <motion.div
-            custom={5}
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            className="mt-16 flex flex-wrap items-center justify-center gap-8 sm:gap-12"
-          >
-            {[
-              { value: arenaStats.totalBattles, label: 'Battles' },
-              { value: models.length + agents.length, label: 'Models' },
-              { value: agents.length, label: 'Agents' },
-              { value: scenarios.length, label: 'Scenarios' },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <p className="font-[family-name:var(--font-mono)] text-2xl sm:text-3xl text-text-primary font-medium">
-                  {formatNumber(stat.value)}
-                </p>
-                <p className="text-text-faint text-xs uppercase tracking-wider mt-1">
-                  {stat.label}
-                </p>
-              </div>
-            ))}
-          </motion.div>
         </div>
       </section>
 
