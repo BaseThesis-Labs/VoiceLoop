@@ -12,6 +12,7 @@ import CodeSection from './components/CodeSection';
 import Footer from './components/Footer';
 import BlogPage from './components/BlogPage';
 import BlogPostPage from './components/BlogPostPage';
+import DocsPage from './components/DocsPage';
 
 function HomePage() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/docs" element={<DocsPage />} />
         <Route path="/blog" element={<BlogPage />} />
         <Route path="/blog/:slug" element={<BlogPostPage />} />
       </Routes>

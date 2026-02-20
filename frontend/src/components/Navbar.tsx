@@ -3,6 +3,7 @@ import { Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 const navLinks = [
+  { label: 'Docs', to: '/docs' },
   { label: 'Voice Arena', href: '/arena/' },
   { label: 'Blog', to: '/blog' },
 ];

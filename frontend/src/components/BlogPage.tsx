@@ -6,6 +6,17 @@ import Footer from './Footer';
 
 const blogPosts = [
   {
+    slug: 'voice-arena',
+    category: 'Technical Deep Dive',
+    date: 'February 2026',
+    title: 'Voice Arena: Why the Voice AI Stack Needs an Arena — and How We Built One',
+    excerpt:
+      'A 17-metric evaluation pipeline, blind human preference voting, and a programmatic Experiments API — the full technical breakdown of Voice Arena.',
+    readTime: '30 min read',
+    tags: ['Voice Arena', 'Evaluation', 'Open Source'],
+    image: '/blog-2.png',
+  },
+  {
     slug: 'voice-ai-2026',
     category: 'Technical Research',
     date: 'February 2026',
@@ -14,6 +25,7 @@ const blogPosts = [
       'We spent months digging into the entire voice AI stack — from TTS latency drops to the infrastructure gaps nobody is filling. Here\'s what we found.',
     readTime: '25 min read',
     tags: ['Voice AI', 'Infrastructure', 'Research'],
+    image: '/blog-1.png',
   },
 ];
 
@@ -34,8 +46,22 @@ function BlogCard({
         to={`/blog/${post.slug}`}
         className="group block relative rounded-2xl border border-border-default bg-bg-surface overflow-hidden hover:border-accent/25 transition-all duration-400"
       >
-        {/* Top gradient accent bar */}
-        <div className="h-[2px] bg-gradient-to-r from-transparent via-accent/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+        {/* Cover image */}
+        {post.image && (
+          <div className="aspect-[2.2/1] overflow-hidden">
+            <img
+              src={post.image}
+              alt={post.title}
+              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-bg-surface via-bg-surface/20 to-transparent" style={{ top: '40%' }} />
+          </div>
+        )}
+
+        {/* Top gradient accent bar (visible when no image) */}
+        {!post.image && (
+          <div className="h-[2px] bg-gradient-to-r from-transparent via-accent/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+        )}
 
         {/* Content */}
         <div className="p-8 sm:p-10">
