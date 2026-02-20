@@ -7,5 +7,6 @@ from app.models.leaderboard import LeaderboardSnapshot
 from app.models.user import User
 from app.models.prompt import Prompt
 from app.models.subscriber import Subscriber
+from app.models.developer import Developer
 
-__all__ = ["Base", "VoiceModel", "Scenario", "Evaluation", "Battle", "LeaderboardSnapshot", "User", "Prompt", "Subscriber"]
+__all__ = ["Base", "VoiceModel", "Scenario", "Evaluation", "Battle", "LeaderboardSnapshot", "User", "Prompt", "Subscriber", "Developer"]
