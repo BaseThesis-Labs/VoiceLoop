@@ -8,5 +8,6 @@ from app.models.user import User
 from app.models.prompt import Prompt
 from app.models.subscriber import Subscriber
 from app.models.developer import Developer
+from app.models.experiment import Experiment, Trial
 
-__all__ = ["Base", "VoiceModel", "Scenario", "Evaluation", "Battle", "LeaderboardSnapshot", "User", "Prompt", "Subscriber", "Developer"]
+__all__ = ["Base", "VoiceModel", "Scenario", "Evaluation", "Battle", "LeaderboardSnapshot", "User", "Prompt", "Subscriber", "Developer", "Experiment", "Trial"]
