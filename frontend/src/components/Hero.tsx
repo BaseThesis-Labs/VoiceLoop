@@ -81,20 +81,20 @@ export default function Hero() {
 
               {/* CTAs */}
               <div className="flex flex-col gap-4">
-                <div className="flex flex-row items-center gap-4">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
                   <a
                     href="/arena/"
-                    className="px-7 py-3.5 bg-accent text-[#0F172A] rounded-lg font-semibold text-sm hover:shadow-[0_0_24px_rgba(45,212,168,0.4)] transition-all duration-300"
+                    className="px-7 py-3.5 bg-accent text-[#0F172A] rounded-lg font-semibold text-sm hover:shadow-[0_0_24px_rgba(45,212,168,0.4)] transition-all duration-300 text-center"
                   >
                     Start for Free
                   </a>
-                  <form onSubmit={handleWaitlist} className="flex flex-row">
+                  <form onSubmit={handleWaitlist} className="flex flex-row min-w-0">
                     <input
                       type="email"
                       placeholder="Your email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="bg-white/10 border border-white/20 rounded-l-lg px-4 py-3 text-sm text-white placeholder-white/40 w-52 focus:outline-none focus:border-white/40 backdrop-blur-sm"
+                      className="bg-white/10 border border-white/20 rounded-l-lg px-4 py-3 text-sm text-white placeholder-white/40 w-full sm:w-52 min-w-0 focus:outline-none focus:border-white/40 backdrop-blur-sm"
                       disabled={status === 'loading'}
                     />
                     <button
