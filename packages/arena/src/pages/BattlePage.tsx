@@ -15,6 +15,7 @@ import { api, type GeneratedBattle } from '../api/client'
 import { ModeSelector, getStoredMode, type BattleMode } from '../components/ModeSelector'
 import S2SBattlePage from './S2SBattlePage'
 import STTBattlePage from './STTBattlePage'
+import AgentBattlePage from './AgentBattlePage'
 
 // ---- Types ----
 type ModelLabel = 'a' | 'b' | 'c' | 'd'
@@ -203,6 +204,11 @@ export default function BattlePage() {
   // Route to STT battle page when in STT mode
   if (battleMode === 'stt') {
     return <STTBattlePage onModeChange={handleModeChange} battleCount={battleCount} />
+  }
+
+  // Route to Agent battle page when in Agent mode
+  if (battleMode === 'agent') {
+    return <AgentBattlePage onModeChange={handleModeChange} battleCount={battleCount} />
   }
 
   return (

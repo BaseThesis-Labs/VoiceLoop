@@ -251,6 +251,73 @@ export interface TTSGenerateResponse {
   model_name: string;
 }
 
+// ---- Agent types ----
+export interface AgentScenario {
+  id: string
+  name: string
+  category: string
+  difficulty: string
+  description: string
+  max_turns: number | null
+  max_duration_seconds: number | null
+}
+
+export interface AgentConfig {
+  id: string
+  name: string
+  architecture_type: string
+  provider: string
+  components: Record<string, string>
+}
+
+export interface AgentBattleSetup {
+  id: string
+  battle_type: string
+  scenario: AgentScenario
+  config_a: AgentConfig
+  config_b: AgentConfig
+  agent_battle_id: string
+}
+
+export interface AgentConversationTurn {
+  role: string
+  text: string | null
+  start_ms?: number
+  end_ms?: number
+  latency_ms?: number
+}
+
+export interface AgentConversationEnd {
+  type: 'conversation_ended'
+  conversation_id: string
+  total_turns: number
+  duration_seconds: number
+  transcript: AgentConversationTurn[]
+}
+
+export interface AgentModelMetrics {
+  agent_label: string
+  config_name: string
+  provider: string
+  components: Record<string, string>
+  total_turns: number | null
+  duration_seconds: number | null
+  avg_latency_ms: number | null
+  p50_latency_ms: number | null
+  p95_latency_ms: number | null
+  task_success: boolean | null
+  joint_goal_accuracy: number | null
+  containment: boolean | null
+}
+
+export interface AgentMetrics {
+  status: string
+  scenario_name: string | null
+  metrics_a: AgentModelMetrics | null
+  metrics_b: AgentModelMetrics | null
+  automated_eval: Record<string, unknown> | null
+}
+
 export const api = {
   models: {
     list: (provider?: string) =>
@@ -363,6 +430,20 @@ export const api = {
     },
     getMetrics: (battleId: string) =>
       request<STTMetrics>(`/battles/${battleId}/stt-metrics`),
+  },
+
+  agent: {
+    setup: () =>
+      request<AgentBattleSetup>('/battles/generate', {
+        method: 'POST',
+        body: JSON.stringify({ battle_type: 'agent' }),
+      }),
+    getMetrics: (battleId: string) =>
+      request<AgentMetrics>(`/battles/${battleId}/agent-metrics`),
+    getStreamUrl: (battleId: string, agent: 'a' | 'b') => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      return `${protocol}//${window.location.host}${API_BASE}/battles/${battleId}/agent-stream?agent=${agent}`
+    },
   },
 
   tts: {
