@@ -1,11 +1,13 @@
+import { type ReactNode } from 'react'
 import { motion } from 'framer-motion'
+import { Volume2, AudioLines, Mic, Bot } from 'lucide-react'
 
 export type BattleMode = 'tts' | 's2s' | 'stt' | 'agent'
 
 interface ModeOption {
   key: BattleMode
   label: string
-  icon: string
+  icon: ReactNode
   subtitle: string
   enabled: boolean
 }
@@ -14,28 +16,28 @@ const MODES: ModeOption[] = [
   {
     key: 'tts',
     label: 'TTS',
-    icon: '🔊',
+    icon: <Volume2 size={14} />,
     subtitle: 'Compare how different models speak the same text',
     enabled: true,
   },
   {
     key: 's2s',
     label: 'S2S',
-    icon: '🔄',
+    icon: <AudioLines size={14} />,
     subtitle: 'Speak to models and compare their spoken responses',
     enabled: true,
   },
   {
     key: 'stt',
     label: 'STT',
-    icon: '🎤',
+    icon: <Mic size={14} />,
     subtitle: 'Compare how different models transcribe the same audio',
     enabled: false,
   },
   {
     key: 'agent',
     label: 'Agent',
-    icon: '🤖',
+    icon: <Bot size={14} />,
     subtitle: 'Have a conversation with two agents and judge who handles it better',
     enabled: false,
   },
@@ -85,7 +87,7 @@ export function ModeSelector({
                     : 'text-text-faint border-border-default opacity-40 cursor-not-allowed'
               }`}
             >
-              <span>{mode.icon}</span>
+              {mode.icon}
               <span className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.1em]">
                 {mode.label}
               </span>
