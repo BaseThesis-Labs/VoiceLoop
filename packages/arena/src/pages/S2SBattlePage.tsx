@@ -12,7 +12,7 @@ import AudioPlayerCard from '../components/AudioPlayerCard'
 import VoteButton from '../components/VoteButton'
 import GatedLoadingState from '../components/GatedLoadingState'
 import DimensionVoter from '../components/DimensionVoter'
-import S2SInputPanel, { type CuratedPrompt } from '../components/S2SInputPanel'
+import S2SInputPanel from '../components/S2SInputPanel'
 import { ModeSelector, type BattleMode } from '../components/ModeSelector'
 import {
   api,
