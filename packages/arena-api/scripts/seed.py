@@ -752,15 +752,15 @@ STT_CLIPS = [
 AGENT_CONFIGS = [
     {
         "id": "agent-vapi-default",
-        "name": "Vapi + GPT-4o-mini + ElevenLabs",
+        "name": "Vapi + GPT-4o-mini + Vapi Voice",
         "architecture_type": "cascade",
         "provider": "vapi",
-        "components_json": {"stt": "deepgram_nova3", "llm": "gpt-4o-mini", "tts": "elevenlabs"},
+        "components_json": {"stt": "deepgram_nova3", "llm": "gpt-4o-mini", "tts": "vapi"},
         "config_json": {
             "llm_provider": "openai",
             "llm_model": "gpt-4o-mini",
-            "tts_provider": "11labs",
-            "tts_voice_id": "",
+            "tts_provider": "vapi",
+            "tts_voice_id": "Elliot",
             "stt_provider": "deepgram",
             "stt_model": "nova-2",
             "first_message": "Hello! How can I help you today?",
@@ -768,15 +768,15 @@ AGENT_CONFIGS = [
     },
     {
         "id": "agent-vapi-quality",
-        "name": "Vapi + GPT-4o + ElevenLabs",
+        "name": "Vapi + GPT-4o + Vapi Voice",
         "architecture_type": "cascade",
         "provider": "vapi",
-        "components_json": {"stt": "deepgram_nova3", "llm": "gpt-4o", "tts": "elevenlabs"},
+        "components_json": {"stt": "deepgram_nova3", "llm": "gpt-4o", "tts": "vapi"},
         "config_json": {
             "llm_provider": "openai",
             "llm_model": "gpt-4o",
-            "tts_provider": "11labs",
-            "tts_voice_id": "",
+            "tts_provider": "vapi",
+            "tts_voice_id": "Rohan",
             "stt_provider": "deepgram",
             "stt_model": "nova-2",
             "first_message": "Hello! How can I help you today?",
@@ -784,15 +784,15 @@ AGENT_CONFIGS = [
     },
     {
         "id": "agent-vapi-claude",
-        "name": "Vapi + Claude Sonnet 4.5 + ElevenLabs",
+        "name": "Vapi + Claude Sonnet 4.5 + Vapi Voice",
         "architecture_type": "cascade",
         "provider": "vapi",
-        "components_json": {"stt": "deepgram_nova3", "llm": "claude-sonnet-4-5", "tts": "elevenlabs"},
+        "components_json": {"stt": "deepgram_nova3", "llm": "claude-sonnet-4-5", "tts": "vapi"},
         "config_json": {
             "llm_provider": "anthropic",
             "llm_model": "claude-sonnet-4-5-20250929",
-            "tts_provider": "11labs",
-            "tts_voice_id": "",
+            "tts_provider": "vapi",
+            "tts_voice_id": "Cole",
             "stt_provider": "deepgram",
             "stt_model": "nova-2",
             "first_message": "Hello! How can I help you today?",
@@ -1009,6 +1009,20 @@ async def seed():
             if not existing:
                 db.add(AgentConfiguration(**ac))
                 configs_added += 1
+            else:
+                # Update config_json and name if changed
+                changed = False
+                if ac.get("config_json") and existing.config_json != ac["config_json"]:
+                    existing.config_json = ac["config_json"]
+                    changed = True
+                if ac.get("name") and existing.name != ac["name"]:
+                    existing.name = ac["name"]
+                    changed = True
+                if ac.get("components_json") and existing.components_json != ac["components_json"]:
+                    existing.components_json = ac["components_json"]
+                    changed = True
+                if changed:
+                    configs_added += 1
 
         # --- Agent Scenarios (update existing + add new) ---
         agent_scenarios_added = 0

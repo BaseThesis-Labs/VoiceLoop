@@ -45,8 +45,22 @@ class VapiAdapter(AgentAdapter):
             raise RuntimeError("Vapi API key not configured")
 
         # Build the inline assistant definition
+        tts_provider = config.get("tts_provider", "vapi")
+        tts_voice_id = config.get("tts_voice_id", "") or config.get("tts_voice", "")
+        first_message = config.get("first_message", "Hello, how can I help you today?")
+
+        # Build voice config — use sensible default voice if not specified
+        voice_config: dict = {"provider": tts_provider}
+        if tts_voice_id:
+            voice_config["voiceId"] = tts_voice_id
+        elif tts_provider == "vapi":
+            voice_config["voiceId"] = "Elliot"
+        else:
+            # Fallback to Vapi's built-in voice if no voiceId for external providers
+            voice_config = {"provider": "vapi", "voiceId": "Elliot"}
+
         assistant_config: dict = {
-            "firstMessage": "Hello, how can I help you today?",
+            "firstMessage": first_message,
             "model": {
                 "provider": config.get("llm_provider", "openai"),
                 "model": config.get("llm_model", "gpt-4o"),
@@ -54,10 +68,7 @@ class VapiAdapter(AgentAdapter):
                     {"role": "system", "content": system_prompt},
                 ],
             },
-            "voice": {
-                "provider": config.get("tts_provider", "cartesia"),
-                "voiceId": config.get("tts_voice", "default"),
-            },
+            "voice": voice_config,
             "transcriber": {
                 "provider": config.get("stt_provider", "deepgram"),
                 "model": config.get("stt_model", "nova-2"),
@@ -109,7 +120,7 @@ class VapiAdapter(AgentAdapter):
         session._ws_url = ws_url  # type: ignore[attr-defined]
         session._ws = None  # type: ignore[attr-defined]
 
-        logger.info("Vapi session created: id=%s ws_url=%s", session_id, ws_url)
+        logger.info("Vapi session created: id=%s ws_url=%s call_status=%s", session_id, ws_url, data.get("status", "unknown"))
         return session
 
     async def get_ws_url(self, session: AgentSessionHandle) -> str:
@@ -136,14 +147,18 @@ class VapiAdapter(AgentAdapter):
         control messages.
         """
         ws = getattr(session, "_ws", None)
-        if ws is None or ws.close_code is not None:
+        if ws is None:
+            return None
+        if ws.close_code is not None:
+            logger.debug("Vapi WS already closed: close_code=%s close_reason=%s", ws.close_code, getattr(ws, 'close_reason', ''))
             return None
 
         try:
             msg = await asyncio.wait_for(ws.recv(), timeout=0.05)
         except asyncio.TimeoutError:
             return None
-        except websockets.exceptions.ConnectionClosed:
+        except websockets.exceptions.ConnectionClosed as e:
+            logger.warning("Vapi WS closed during recv: code=%s reason=%s", e.code, e.reason)
             session.is_active = False
             return None
 
@@ -152,6 +167,7 @@ class VapiAdapter(AgentAdapter):
             return msg
 
         # Text frame -- treat as JSON control message
+        logger.debug("Vapi text frame: %s", msg[:300] if isinstance(msg, str) else str(msg)[:300])
         self._handle_control_message(session, msg)
         return None
 

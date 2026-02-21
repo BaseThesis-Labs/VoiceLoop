@@ -133,8 +133,14 @@ async def agent_stream(websocket: WebSocket, battle_id: str):
 
     # Connect to provider WebSocket
     provider_ws_url = await adapter.get_ws_url(session)
+    logger.info("Connecting to provider WS: %s", provider_ws_url[:100])
     try:
-        provider_ws = await websockets.connect(provider_ws_url)
+        provider_ws = await websockets.connect(
+            provider_ws_url,
+            close_timeout=5,
+            ping_interval=20,
+            ping_timeout=20,
+        )
         session._ws = provider_ws
     except Exception as e:
         logger.error("Failed to connect provider WS: %s", e)
@@ -178,13 +184,24 @@ async def agent_stream(websocket: WebSocket, battle_id: str):
             while session.is_active:
                 chunk = await adapter.receive_audio(session)
                 if chunk is None:
+                    # Check if provider WS has closed
+                    ws = getattr(session, "_ws", None)
+                    if ws is not None and ws.close_code is not None:
+                        logger.info("Provider WS closed (code=%s), ending proxy", ws.close_code)
+                        break
                     await asyncio.sleep(0.01)
                     continue
                 if chunk == b"__CLEAR__":
-                    await websocket.send_json({"type": "clear"})
+                    try:
+                        await websocket.send_json({"type": "clear"})
+                    except Exception:
+                        break
                     continue
                 agent_audio_chunks.append(chunk)
-                await websocket.send_bytes(chunk)
+                try:
+                    await websocket.send_bytes(chunk)
+                except Exception:
+                    break
         except Exception as e:
             if session.is_active:
                 logger.error("Provider->Browser error: %s", e)
@@ -273,14 +290,17 @@ async def agent_stream(websocket: WebSocket, battle_id: str):
 
         await db.commit()
 
-    # Send final summary to browser
-    await websocket.send_json({
-        "type": "conversation_ended",
-        "conversation_id": conv_id,
-        "total_turns": summary.get("total_turns", 0),
-        "duration_seconds": duration_seconds,
-        "transcript": session.turns,
-    })
+    # Send final summary to browser (may fail if browser already disconnected)
+    try:
+        await websocket.send_json({
+            "type": "conversation_ended",
+            "conversation_id": conv_id,
+            "total_turns": summary.get("total_turns", 0),
+            "duration_seconds": duration_seconds,
+            "transcript": session.turns,
+        })
+    except Exception:
+        logger.debug("Browser WS already closed, couldn't send conversation_ended")
 
     try:
         await websocket.close()
