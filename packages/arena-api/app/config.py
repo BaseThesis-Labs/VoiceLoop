@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     stt_timeout_seconds: int = 30
     vapi_api_key: str = ""
     retell_api_key: str = ""
+    gemini_api_key: str = ""
+    google_api_key: str = ""
     agent_conversation_timeout: int = 120
     enable_diarization: bool = True
     default_num_speakers: int = 2
@@ -36,6 +38,9 @@ class Settings(BaseSettings):
         # Railway provides DATABASE_URL as postgresql:// but asyncpg needs postgresql+asyncpg://
         if self.database_url.startswith("postgresql://"):
             self.database_url = self.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        # Use google_api_key as fallback for google_cloud_api_key
+        if not self.google_cloud_api_key and self.google_api_key:
+            self.google_cloud_api_key = self.google_api_key
         return self
 
 

@@ -12,7 +12,7 @@ import AgentConversation from '../components/AgentConversation'
 import ConversationSummary from '../components/ConversationSummary'
 import AgentSubDimensionVoter from '../components/AgentSubDimensionVoter'
 import VoteButton from '../components/VoteButton'
-import { ModeSelector, type BattleMode } from '../components/ModeSelector'
+import { type BattleMode } from '../components/ModeSelector'
 import {
   api,
   type AgentBattleSetup,
@@ -26,10 +26,9 @@ type VoteChoice = 'a' | 'b' | 'tie' | null
 const COLORS = { a: '#6366f1', b: '#f59e0b' }
 
 export default function AgentBattlePage({
-  onModeChange,
   battleCount: externalBattleCount,
 }: {
-  onModeChange: (mode: BattleMode) => void
+  onModeChange?: (mode: BattleMode) => void
   battleCount: number
 }) {
   const [state, setState] = useState<AgentState>('idle')
@@ -139,20 +138,14 @@ export default function AgentBattlePage({
   }
 
   return (
-    <div className="min-h-screen bg-bg-primary pb-24">
-      <div className="max-w-4xl mx-auto px-6 pt-10">
+    <>
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
-          <div>
-            <ModeSelector active="agent" onChange={onModeChange} />
-            <div className="flex items-center gap-3 mt-4">
-              <div className="flex items-center gap-2 text-text-faint">
-                <Zap size={14} />
-                <span className="font-[family-name:var(--font-mono)] text-xs">
-                  Battle #{battleCount + 1}
-                </span>
-              </div>
-            </div>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <Zap size={14} className="text-accent" />
+            <span className="font-[family-name:var(--font-mono)] text-sm text-text-body">
+              Agent Battle <span className="text-text-primary">#{battleCount + 1}</span>
+            </span>
           </div>
           <button
             onClick={() => navigator.clipboard.writeText(window.location.href)}
@@ -408,7 +401,6 @@ export default function AgentBattlePage({
             <Loader2 size={24} className="animate-spin text-accent" />
           </div>
         )}
-      </div>
-    </div>
+    </>
   )
 }

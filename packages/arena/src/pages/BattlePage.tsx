@@ -196,24 +196,55 @@ export default function BattlePage() {
     return map[label]
   }
 
-  // Route to S2S battle page when in S2S mode
-  if (battleMode === 's2s') {
-    return <S2SBattlePage onModeChange={handleModeChange} battleCount={battleCount} />
-  }
-
-  // Route to STT battle page when in STT mode
-  if (battleMode === 'stt') {
-    return <STTBattlePage onModeChange={handleModeChange} battleCount={battleCount} />
-  }
-
-  // Route to Agent battle page when in Agent mode
-  if (battleMode === 'agent') {
-    return <AgentBattlePage onModeChange={handleModeChange} battleCount={battleCount} />
-  }
-
   return (
     <div className="min-h-screen bg-bg-primary pb-24">
       <div className="max-w-5xl mx-auto px-6 pt-10">
+        {/* Persistent Mode Selector — never unmounts during mode switches */}
+        <div className="mb-8">
+          <ModeSelector active={battleMode} onChange={handleModeChange} />
+        </div>
+
+        {/* Mode-specific content */}
+        <AnimatePresence mode="wait">
+          {battleMode === 's2s' ? (
+            <motion.div
+              key="s2s"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <S2SBattlePage onModeChange={handleModeChange} battleCount={battleCount} />
+            </motion.div>
+          ) : battleMode === 'stt' ? (
+            <motion.div
+              key="stt"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <STTBattlePage onModeChange={handleModeChange} battleCount={battleCount} />
+            </motion.div>
+          ) : battleMode === 'agent' ? (
+            <motion.div
+              key="agent"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <AgentBattlePage onModeChange={handleModeChange} battleCount={battleCount} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="tts"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+
         {/* Hidden audio elements */}
         {battle && (
           <>
@@ -224,9 +255,9 @@ export default function BattlePage() {
           </>
         )}
 
-        {/* Header + Mode Selector */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Zap size={14} className="text-accent" />
               <span className="font-[family-name:var(--font-mono)] text-sm text-text-body">
@@ -238,7 +269,6 @@ export default function BattlePage() {
               How it works
             </button>
           </div>
-          <ModeSelector active={battleMode} onChange={handleModeChange} />
         </div>
 
         {/* Loading State */}
@@ -553,6 +583,10 @@ export default function BattlePage() {
             </AnimatePresence>
           </>
         )}
+
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   )

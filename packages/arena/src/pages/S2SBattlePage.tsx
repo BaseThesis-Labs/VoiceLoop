@@ -13,7 +13,7 @@ import VoteButton from '../components/VoteButton'
 import GatedLoadingState from '../components/GatedLoadingState'
 import DimensionVoter from '../components/DimensionVoter'
 import S2SInputPanel from '../components/S2SInputPanel'
-import { ModeSelector, type BattleMode } from '../components/ModeSelector'
+import { type BattleMode } from '../components/ModeSelector'
 import {
   api,
   type S2SBattleSetup,
@@ -42,10 +42,9 @@ const LABEL_NAMES: Record<ModelLabel, string> = {
 
 // ---- Component ----
 export default function S2SBattlePage({
-  onModeChange,
   battleCount: externalBattleCount,
 }: {
-  onModeChange: (mode: BattleMode) => void
+  onModeChange?: (mode: BattleMode) => void
   battleCount: number
 }) {
   const [state, setState] = useState<S2SState>('idle')
@@ -260,8 +259,7 @@ export default function S2SBattlePage({
   }
 
   return (
-    <div className="min-h-screen bg-bg-primary pb-24">
-      <div className="max-w-5xl mx-auto px-6 pt-10">
+    <>
         {/* Hidden audio elements */}
         {result && (
           <>
@@ -272,9 +270,9 @@ export default function S2SBattlePage({
           </>
         )}
 
-        {/* Header + Mode Selector */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Zap size={14} className="text-accent" />
               <span className="font-[family-name:var(--font-mono)] text-sm text-text-body">
@@ -286,7 +284,6 @@ export default function S2SBattlePage({
               How it works
             </button>
           </div>
-          <ModeSelector active="s2s" onChange={onModeChange} />
         </div>
 
         {/* Loading State */}
@@ -642,7 +639,6 @@ export default function S2SBattlePage({
             </AnimatePresence>
           </>
         )}
-      </div>
-    </div>
+    </>
   )
 }

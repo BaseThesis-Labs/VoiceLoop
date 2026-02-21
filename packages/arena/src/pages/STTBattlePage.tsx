@@ -13,7 +13,7 @@ import VoteButton from '../components/VoteButton'
 import GatedLoadingState from '../components/GatedLoadingState'
 import STTInputPanel from '../components/STTInputPanel'
 import AudioClipPlayer from '../components/AudioClipPlayer'
-import { ModeSelector, type BattleMode } from '../components/ModeSelector'
+import { type BattleMode } from '../components/ModeSelector'
 import {
   api,
   type STTBattleSetup,
@@ -43,10 +43,9 @@ const LABEL_NAMES: Record<ModelLabel, string> = {
 
 // ---- Component ----
 export default function STTBattlePage({
-  onModeChange,
   battleCount: externalBattleCount,
 }: {
-  onModeChange: (mode: BattleMode) => void
+  onModeChange?: (mode: BattleMode) => void
   battleCount: number
 }) {
   const [state, setState] = useState<STTState>('idle')
@@ -181,26 +180,17 @@ export default function STTBattlePage({
 
   // ---- Render ----
   return (
-    <div className="min-h-screen bg-bg-primary pb-24">
-      <div className="max-w-5xl mx-auto px-6 pt-10">
+    <>
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
-          <div>
-            <ModeSelector active="stt" onChange={onModeChange} />
-            <div className="flex items-center gap-3 mt-4">
-              <div className="flex items-center gap-2 text-text-faint">
-                <Zap size={14} />
-                <span className="font-[family-name:var(--font-mono)] text-xs">
-                  Battle #{battleCount + 1}
-                </span>
-              </div>
-            </div>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <Zap size={14} className="text-accent" />
+            <span className="font-[family-name:var(--font-mono)] text-sm text-text-body">
+              STT Battle <span className="text-text-primary">#{battleCount + 1}</span>
+            </span>
           </div>
           <button
-            onClick={() => {
-              const url = window.location.href
-              navigator.clipboard.writeText(url)
-            }}
+            onClick={() => navigator.clipboard.writeText(window.location.href)}
             className="text-text-faint hover:text-text-body transition-colors"
             title="Share battle"
           >
@@ -381,7 +371,6 @@ export default function STTBattlePage({
             )}
           </motion.div>
         )}
-      </div>
-    </div>
+    </>
   )
 }

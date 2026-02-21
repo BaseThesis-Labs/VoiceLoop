@@ -701,7 +701,12 @@ async def _generate_s2s_battle(db: AsyncSession) -> S2SBattleSetupResponse:
             selected.append(random.choice(models))
 
     if len(selected) < 2:
-        raise HTTPException(status_code=500, detail="Need S2S models from at least 2 providers. Run seed.py first.")
+        # Fallback: pick 2 different models from any provider
+        if len(all_models) >= 2:
+            random.shuffle(all_models)
+            selected = all_models[:2]
+        else:
+            raise HTTPException(status_code=500, detail="Need at least 2 S2S models. Run seed.py first.")
 
     # Shuffle so position doesn't reveal provider
     random.shuffle(selected)
@@ -1026,6 +1031,7 @@ async def _generate_agent_battle(db: AsyncSession):
         battle_type="agent",
     )
     db.add(battle)
+    await db.flush()  # Flush so Battle exists for AgentBattle FK
 
     # Create AgentBattle record
     agent_battle = AgentBattle(
