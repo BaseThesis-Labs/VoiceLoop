@@ -328,23 +328,18 @@ async def vote_battle(
         await db.refresh(battle)
         return battle
 
-    # Collect all participating models
-    model_ids = [battle.model_a_id, battle.model_b_id]
-    if battle.model_c_id:
-        model_ids.append(battle.model_c_id)
-    if battle.model_d_id:
-        model_ids.append(battle.model_d_id)
+    # Collect all participating models (filter out None for partial results)
+    model_ids = [mid for mid in [battle.model_a_id, battle.model_b_id, battle.model_c_id, battle.model_d_id] if mid is not None]
 
     models_result = await db.execute(
         select(VoiceModel).where(VoiceModel.id.in_(model_ids))
     )
     models_map = {m.id: m for m in models_result.scalars().all()}
 
-    label_to_id = {"a": battle.model_a_id, "b": battle.model_b_id}
-    if battle.model_c_id:
-        label_to_id["c"] = battle.model_c_id
-    if battle.model_d_id:
-        label_to_id["d"] = battle.model_d_id
+    label_to_id = {}
+    for label, mid in [("a", battle.model_a_id), ("b", battle.model_b_id), ("c", battle.model_c_id), ("d", battle.model_d_id)]:
+        if mid is not None:
+            label_to_id[label] = mid
 
     if body.winner not in ("tie", "all_bad"):
         # Winner gets ELO boost vs each loser (pairwise updates)
