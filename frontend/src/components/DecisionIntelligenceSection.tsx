@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 
 /* ── Step data ──────────────────────────────────────────────────── */
@@ -246,27 +247,62 @@ function FlowDiagram() {
 /* ── Main section ───────────────────────────────────────────────── */
 
 export default function DecisionIntelligenceSection() {
+  const [hoveredImg, setHoveredImg] = useState<number | null>(null);
+
+  const images = [
+    '/voice_harness_1.png',
+    '/voice_harness_2.png',
+    '/voice_harness_3.png',
+  ];
+
   return (
     <section className="relative py-32 lg:py-40 overflow-hidden">
       {/* Gradient divider at top */}
       <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-border-default to-transparent" />
 
-      {/* Atmospheric background */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        aria-hidden="true"
-        style={{
-          background: `
-            radial-gradient(ellipse 600px 450px at 65% 35%, rgba(45, 212, 168, 0.06), transparent),
-            radial-gradient(ellipse 450px 350px at 30% 65%, rgba(45, 212, 168, 0.04), transparent)
-          `,
-        }}
-      />
+      {/* Panoramic image background — three images in a row */}
+      <div className="absolute inset-0" aria-hidden="true">
+        {/* Image strip with thin gaps */}
+        <div className="absolute inset-0 flex gap-[2px]">
+          {images.map((src, i) => (
+            <div
+              key={i}
+              className="flex-1 h-full relative overflow-hidden transition-opacity duration-500"
+              style={{
+                opacity: hoveredImg === null ? 0.45 : hoveredImg === i ? 0.85 : 0.12,
+              }}
+              onMouseEnter={() => setHoveredImg(i)}
+              onMouseLeave={() => setHoveredImg(null)}
+            >
+              <img src={src} alt="" className="w-full h-full object-cover" />
+            </div>
+          ))}
+        </div>
+        {/* Top / bottom fade to merge with page bg */}
+        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-bg-primary to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-bg-primary to-transparent pointer-events-none" />
+        {/* Accent glow on top */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: `
+              radial-gradient(ellipse 600px 450px at 65% 35%, rgba(45, 212, 168, 0.08), transparent),
+              radial-gradient(ellipse 450px 350px at 30% 65%, rgba(45, 212, 168, 0.05), transparent)
+            `,
+          }}
+        />
+      </div>
 
-      <div className="max-w-[1280px] mx-auto px-6">
+      <div className="relative z-10 max-w-[1280px] mx-auto px-6">
         <div className="flex flex-col lg:flex-row-reverse items-center gap-12 lg:gap-20">
-          {/* Text — right side (via flex-row-reverse) */}
-          <div className="max-w-[480px]">
+          {/* Text — right side (via flex-row-reverse) with backdrop */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="max-w-[480px] bg-black/45 backdrop-blur-sm rounded-2xl px-8 py-8"
+          >
             <motion.span
               initial={{ opacity: 0, y: 16 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -316,7 +352,7 @@ export default function DecisionIntelligenceSection() {
                 </li>
               ))}
             </motion.ul>
-          </div>
+          </motion.div>
 
           {/* Visual — left side (via flex-row-reverse) */}
           <motion.div
