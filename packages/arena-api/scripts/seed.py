@@ -424,6 +424,40 @@ MODELS = [
             "accent": "american",
         },
     },
+    # --- S2S Models ---
+    {
+        "name": "GPT-4o Realtime (Alloy)",
+        "provider": "openai",
+        "version": "gpt-4o-realtime",
+        "model_type": "s2s",
+        "config_json": {
+            "model_id": "gpt-4o-realtime-preview",
+            "voice_id": "alloy",
+            "description": "OpenAI GPT-4o Realtime with Alloy voice",
+        },
+    },
+    {
+        "name": "GPT-4o Realtime (Shimmer)",
+        "provider": "openai",
+        "version": "gpt-4o-realtime",
+        "model_type": "s2s",
+        "config_json": {
+            "model_id": "gpt-4o-realtime-preview",
+            "voice_id": "shimmer",
+            "description": "OpenAI GPT-4o Realtime with Shimmer voice",
+        },
+    },
+    {
+        "name": "Hume EVI 2",
+        "provider": "hume",
+        "version": "evi-2",
+        "model_type": "s2s",
+        "config_json": {
+            "model_id": "evi-2",
+            "config_id": None,
+            "description": "Hume EVI 2 empathic voice interface",
+        },
+    },
 ]
 
 SCENARIOS = [
@@ -486,6 +520,95 @@ PROMPTS = [
 ]
 
 
+# Curated audio prompts for S2S battles
+S2S_PROMPTS = [
+    {
+        "text": "Hi, I'd like to book a table for two tonight at seven. Do you have anything available near the window?",
+        "category": "booking",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/booking_table.wav",
+        "duration_seconds": 5.2,
+    },
+    {
+        "text": "I've been having trouble with my internet connection all morning. Can you help me figure out what's going on?",
+        "category": "customer_support",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/internet_trouble.wav",
+        "duration_seconds": 5.8,
+    },
+    {
+        "text": "Can you give me directions to the nearest pharmacy? I'm currently at the corner of Main Street and Fifth Avenue.",
+        "category": "directions",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/directions_pharmacy.wav",
+        "duration_seconds": 5.5,
+    },
+    {
+        "text": "I'd like to schedule an appointment with Doctor Chen for next Tuesday. Morning would work best for me.",
+        "category": "medical",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/medical_appointment.wav",
+        "duration_seconds": 5.0,
+    },
+    {
+        "text": "Hey, what's the weather going to be like this weekend? I'm trying to plan an outdoor picnic.",
+        "category": "general",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/weather_weekend.wav",
+        "duration_seconds": 4.5,
+    },
+    {
+        "text": "I received a damaged package and I'd like to request a replacement. My order number is seven eight nine four five.",
+        "category": "customer_support",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/damaged_package.wav",
+        "duration_seconds": 5.8,
+    },
+    {
+        "text": "Can you recommend a good Italian restaurant nearby? I'm looking for something casual but with great pasta.",
+        "category": "general",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/restaurant_recommend.wav",
+        "duration_seconds": 5.3,
+    },
+    {
+        "text": "I need to cancel my subscription but I want to make sure I won't lose any of my saved data first.",
+        "category": "customer_support",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/cancel_subscription.wav",
+        "duration_seconds": 5.5,
+    },
+    {
+        "text": "What time does the last train to downtown leave today? And is there a bus alternative if I miss it?",
+        "category": "directions",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/train_schedule.wav",
+        "duration_seconds": 5.2,
+    },
+    {
+        "text": "I'd like to order a large pepperoni pizza with extra cheese for delivery. How long will it take?",
+        "category": "booking",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/pizza_order.wav",
+        "duration_seconds": 4.8,
+    },
+    {
+        "text": "I'm feeling a bit under the weather. What are some home remedies for a sore throat and congestion?",
+        "category": "medical",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/sore_throat.wav",
+        "duration_seconds": 5.5,
+    },
+    {
+        "text": "Could you explain the difference between your basic and premium plans? I want to know what I get for the extra cost.",
+        "category": "general",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/plan_comparison.wav",
+        "duration_seconds": 5.8,
+    },
+]
+
+
 async def seed():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -512,6 +635,13 @@ async def seed():
                 db.add(Prompt(**p))
                 prompts_added += 1
 
+        s2s_prompts_added = 0
+        for p in S2S_PROMPTS:
+            existing = await db.execute(select(Prompt).where(Prompt.text == p["text"]).limit(1))
+            if existing.scalars().first() is None:
+                db.add(Prompt(**p))
+                s2s_prompts_added += 1
+
         await db.commit()
         providers = {}
         for m in MODELS:
@@ -520,7 +650,8 @@ async def seed():
         print(
             f"Seeded {models_added}/{len(MODELS)} voices ({provider_str}), "
             f"{scenarios_added}/{len(SCENARIOS)} scenarios, "
-            f"and {prompts_added}/{len(PROMPTS)} prompts."
+            f"{prompts_added}/{len(PROMPTS)} TTS prompts, "
+            f"and {s2s_prompts_added}/{len(S2S_PROMPTS)} S2S curated prompts."
         )
 
 
