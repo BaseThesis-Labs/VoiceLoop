@@ -70,14 +70,11 @@ class VapiAdapter(AgentAdapter):
         payload = {
             "assistant": assistant_config,
             "transport": {
-                "provider": "websocket",
-                "audioFormat": {
-                    "encoding": "pcm_s16le",
-                    "sampleRate": 16000,
-                    "channels": 1,
-                },
+                "provider": "vapi.websocket",
             },
         }
+
+        logger.info("Vapi create_session payload: %s", json.dumps(payload, indent=2)[:500])
 
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
@@ -88,14 +85,20 @@ class VapiAdapter(AgentAdapter):
                     "Content-Type": "application/json",
                 },
             )
-            resp.raise_for_status()
+            if resp.status_code != 201:
+                logger.error("Vapi API error %d: %s", resp.status_code, resp.text[:500])
+                resp.raise_for_status()
             data = resp.json()
 
         session_id = data.get("id", str(uuid.uuid4()))
+        # websocketCallUrl may be top-level or nested under transport
         ws_url = data.get("websocketCallUrl", "")
+        if not ws_url:
+            transport = data.get("transport", {})
+            ws_url = transport.get("websocketCallUrl", "")
 
         if not ws_url:
-            raise RuntimeError("Vapi response did not include a websocketCallUrl")
+            raise RuntimeError(f"Vapi response did not include a websocketCallUrl: {list(data.keys())}")
 
         session = AgentSessionHandle(
             session_id=session_id,
@@ -116,7 +119,7 @@ class VapiAdapter(AgentAdapter):
     async def send_audio(self, session: AgentSessionHandle, audio_chunk: bytes) -> None:
         """Send a raw PCM audio chunk over the session WebSocket."""
         ws = getattr(session, "_ws", None)
-        if ws is None or ws.closed:
+        if ws is None or ws.close_code is not None:
             logger.warning("send_audio called but WS is not open (session %s)", session.session_id)
             return
         try:
@@ -133,7 +136,7 @@ class VapiAdapter(AgentAdapter):
         control messages.
         """
         ws = getattr(session, "_ws", None)
-        if ws is None or ws.closed:
+        if ws is None or ws.close_code is not None:
             return None
 
         try:
@@ -155,7 +158,7 @@ class VapiAdapter(AgentAdapter):
     async def end_session(self, session: AgentSessionHandle) -> dict:
         """Terminate the Vapi call and return a summary."""
         ws = getattr(session, "_ws", None)
-        if ws is not None and not ws.closed:
+        if ws is not None and not ws.close_code is not None:
             try:
                 await ws.send(json.dumps({"type": "end-call"}))
                 await ws.close()

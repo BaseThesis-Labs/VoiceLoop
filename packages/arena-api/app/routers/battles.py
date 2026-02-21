@@ -1017,11 +1017,17 @@ async def _generate_agent_battle(db: AsyncSession):
     if not scenario:
         raise HTTPException(status_code=404, detail="No agent scenarios available. Run seed script.")
 
-    # Get all agent configs, group by provider
+    # Get all agent configs, group by provider (skip configs with empty required fields)
     result = await db.execute(select(AgentConfiguration))
-    all_configs = result.scalars().all()
+    all_configs = []
+    for c in result.scalars().all():
+        # Retell requires agent_id in config
+        if c.provider == "retell" and not (c.config_json or {}).get("agent_id"):
+            continue
+        all_configs.append(c)
+
     if len(all_configs) < 2:
-        raise HTTPException(status_code=404, detail="Need at least 2 agent configurations. Run seed script.")
+        raise HTTPException(status_code=404, detail="Need at least 2 valid agent configurations. Run seed script and configure agent_id for Retell.")
 
     by_provider: dict[str, list] = {}
     for c in all_configs:

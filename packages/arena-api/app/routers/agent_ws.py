@@ -117,8 +117,14 @@ async def agent_stream(websocket: WebSocket, battle_id: str):
     system_prompt = scenario.system_prompt or scenario.description if scenario else ""
     tools = scenario.tools_available if scenario else None
 
+    # Embed tool descriptions into system prompt instead of passing as provider tools
+    # (these are simulated tools that can't actually be called)
+    if tools:
+        tool_lines = "\n".join(f"- {t['name']}: {t.get('description', '')}" for t in tools)
+        system_prompt += f"\n\nYou have access to the following tools (simulate their use as needed):\n{tool_lines}"
+
     try:
-        session = await adapter.create_session(system_prompt, tools, config.config_json or {})
+        session = await adapter.create_session(system_prompt, None, config.config_json or {})
     except Exception as e:
         logger.error("Failed to create agent session: %s", e)
         await websocket.send_json({"type": "error", "message": f"Failed to connect to {config.provider}"})

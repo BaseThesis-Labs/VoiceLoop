@@ -99,7 +99,7 @@ class RetellAdapter(AgentAdapter):
     async def send_audio(self, session: AgentSessionHandle, audio_chunk: bytes) -> None:
         """Send raw PCM audio bytes over the session WebSocket."""
         ws = getattr(session, "_ws", None)
-        if ws is None or ws.closed:
+        if ws is None or ws.close_code is not None:
             logger.warning("send_audio called but WS is not open (session %s)", session.session_id)
             return
         try:
@@ -119,7 +119,7 @@ class RetellAdapter(AgentAdapter):
             - ``None`` on timeout or update-only control messages.
         """
         ws = getattr(session, "_ws", None)
-        if ws is None or ws.closed:
+        if ws is None or ws.close_code is not None:
             return None
 
         try:
@@ -150,7 +150,7 @@ class RetellAdapter(AgentAdapter):
     async def end_session(self, session: AgentSessionHandle) -> dict:
         """Close the Retell WebSocket and return a session summary."""
         ws = getattr(session, "_ws", None)
-        if ws is not None and not ws.closed:
+        if ws is not None and not ws.close_code is not None:
             try:
                 await ws.close()
             except Exception:
