@@ -11,6 +11,7 @@ MODELS = [
         "name": "Samantha - Support Leader",
         "provider": "cartesia",
         "version": "sonic-3",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "f4e8781b-a420-4080-81cf-576331238efa",
             "model_id": "sonic-3",
@@ -22,6 +23,7 @@ MODELS = [
         "name": "Carson - Friendly Support",
         "provider": "cartesia",
         "version": "sonic-3",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "96c64eb5-a945-448f-9710-980abe7a514c",
             "model_id": "sonic-3",
@@ -33,6 +35,7 @@ MODELS = [
         "name": "Darla - Resolution Agent",
         "provider": "cartesia",
         "version": "sonic-3",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "996a8b96-4804-46f0-8e05-3fd4ef1a87cd",
             "model_id": "sonic-3",
@@ -44,6 +47,7 @@ MODELS = [
         "name": "Troy - Fix It Man",
         "provider": "cartesia",
         "version": "sonic-3",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "726d5ae5-055f-4c3d-8355-d9677de68937",
             "model_id": "sonic-3",
@@ -55,6 +59,7 @@ MODELS = [
         "name": "Mia - Agent",
         "provider": "cartesia",
         "version": "sonic-3",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "1d3ba41a-96e6-44ad-aabb-9817c56caa68",
             "model_id": "sonic-3",
@@ -66,6 +71,7 @@ MODELS = [
         "name": "Nathan - Easy Talker",
         "provider": "cartesia",
         "version": "sonic-3",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "97f4b8fb-f2fe-444b-bb9a-c109783a857a",
             "model_id": "sonic-3",
@@ -77,6 +83,7 @@ MODELS = [
         "name": "Priya - Trusted Operator",
         "provider": "cartesia",
         "version": "sonic-3",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "f6141af3-5f94-418c-80ed-a45d450e7e2e",
             "model_id": "sonic-3",
@@ -88,6 +95,7 @@ MODELS = [
         "name": "Ben - Helpful Man",
         "provider": "cartesia",
         "version": "sonic-3",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "bbee10a8-4f08-4c5c-8282-e69299115055",
             "model_id": "sonic-3",
@@ -99,6 +107,7 @@ MODELS = [
         "name": "Brenda - Host",
         "provider": "cartesia",
         "version": "sonic-3",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "607167f6-9bf2-473c-accc-ac7b3b66b30b",
             "model_id": "sonic-3",
@@ -110,6 +119,7 @@ MODELS = [
         "name": "Valerie - Support Authority",
         "provider": "cartesia",
         "version": "sonic-3",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "af346552-54bf-4c2b-a4d4-9d2820f51b6c",
             "model_id": "sonic-3",
@@ -122,6 +132,7 @@ MODELS = [
         "name": "Emily - Conversational",
         "provider": "smallestai",
         "version": "lightning",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "emily",
             "model_id": "lightning",
@@ -134,6 +145,7 @@ MODELS = [
         "name": "James - Confident",
         "provider": "smallestai",
         "version": "lightning",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "james",
             "model_id": "lightning",
@@ -146,6 +158,7 @@ MODELS = [
         "name": "Jasmine - Strong",
         "provider": "smallestai",
         "version": "lightning",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "jasmine",
             "model_id": "lightning",
@@ -158,6 +171,7 @@ MODELS = [
         "name": "George - Friendly",
         "provider": "smallestai",
         "version": "lightning",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "george",
             "model_id": "lightning",
@@ -170,6 +184,7 @@ MODELS = [
         "name": "Arman - Versatile",
         "provider": "smallestai",
         "version": "lightning",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "arman",
             "model_id": "lightning",
@@ -182,6 +197,7 @@ MODELS = [
         "name": "Enola - Warm",
         "provider": "smallestai",
         "version": "lightning",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "enola",
             "model_id": "lightning",
@@ -194,6 +210,7 @@ MODELS = [
         "name": "Judi - Calming",
         "provider": "smallestai",
         "version": "lightning",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "judi",
             "model_id": "lightning",
@@ -206,6 +223,7 @@ MODELS = [
         "name": "Rebecca - Articulate",
         "provider": "smallestai",
         "version": "lightning",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "rebecca",
             "model_id": "lightning",
@@ -218,6 +236,7 @@ MODELS = [
         "name": "Karen - Young",
         "provider": "smallestai",
         "version": "lightning",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "karen",
             "model_id": "lightning",
@@ -231,6 +250,7 @@ MODELS = [
         "name": "Rachel - Warm Narrator",
         "provider": "elevenlabs",
         "version": "turbo-v2.5",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "21m00Tcm4TlvDq8ikWAM",
             "model_id": "eleven_turbo_v2_5",
@@ -242,6 +262,7 @@ MODELS = [
         "name": "Josh - Deep Speaker",
         "provider": "elevenlabs",
         "version": "turbo-v2.5",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "TxGEqnHWrfWFTfGW9XjX",
             "model_id": "eleven_turbo_v2_5",
@@ -253,6 +274,7 @@ MODELS = [
         "name": "Bella - Soft Speaker",
         "provider": "elevenlabs",
         "version": "turbo-v2.5",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "EXAVITQu4vr4xnSDxMaL",
             "model_id": "eleven_turbo_v2_5",
@@ -264,6 +286,7 @@ MODELS = [
         "name": "Antoni - Crisp Talker",
         "provider": "elevenlabs",
         "version": "turbo-v2.5",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "ErXwobaYiN019PkySvjV",
             "model_id": "eleven_turbo_v2_5",
@@ -275,6 +298,7 @@ MODELS = [
         "name": "Elli - Young Voice",
         "provider": "elevenlabs",
         "version": "turbo-v2.5",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "MF3mGyEYCl7XYWbV9V6O",
             "model_id": "eleven_turbo_v2_5",
@@ -287,6 +311,7 @@ MODELS = [
         "name": "Thalia - Warm Speaker",
         "provider": "deepgram",
         "version": "aura-2",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "thalia",
             "model_id": "aura-2",
@@ -299,6 +324,7 @@ MODELS = [
         "name": "Apollo - Clear Narrator",
         "provider": "deepgram",
         "version": "aura-2",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "apollo",
             "model_id": "aura-2",
@@ -311,6 +337,7 @@ MODELS = [
         "name": "Athena - Confident",
         "provider": "deepgram",
         "version": "aura-2",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "athena",
             "model_id": "aura-2",
@@ -323,6 +350,7 @@ MODELS = [
         "name": "Draco - British Gent",
         "provider": "deepgram",
         "version": "aura-2",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "draco",
             "model_id": "aura-2",
@@ -335,6 +363,7 @@ MODELS = [
         "name": "Luna - Gentle",
         "provider": "deepgram",
         "version": "aura-2",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "luna",
             "model_id": "aura-2",
@@ -347,6 +376,7 @@ MODELS = [
         "name": "Orion - Authoritative",
         "provider": "deepgram",
         "version": "aura-2",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "orion",
             "model_id": "aura-2",
@@ -359,6 +389,7 @@ MODELS = [
         "name": "Pandora - British Lady",
         "provider": "deepgram",
         "version": "aura-2",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "pandora",
             "model_id": "aura-2",
@@ -371,6 +402,7 @@ MODELS = [
         "name": "Hyperion - Aussie",
         "provider": "deepgram",
         "version": "aura-2",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "hyperion",
             "model_id": "aura-2",
@@ -383,6 +415,7 @@ MODELS = [
         "name": "Asteria - Versatile",
         "provider": "deepgram",
         "version": "aura-2",
+        "model_type": "tts",
         "config_json": {
             "voice_id": "asteria",
             "model_id": "aura-2",
