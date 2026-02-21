@@ -14,6 +14,7 @@ from app.models.voice_model import VoiceModel
 from fastapi import File, Form, UploadFile
 from app.schemas.battle import BattleCreate, BattleVote, BattleResponse, BattleGenerateResponse, BattleGenerateRequest
 from app.schemas.s2s import CuratedPromptItem, S2SBattleSetupResponse, S2SBattleResponse, S2SMetricsResponse, S2SModelMetrics
+from app.schemas.stt import AudioClipItem, STTBattleSetupResponse, STTBattleResponse, STTTranscriptItem, STTMetricsResponse, STTModelMetrics, STTDiffItem
 from app.services.elo import update_elo
 from app.services.tts_service import generate_tts
 
@@ -23,11 +24,12 @@ router = APIRouter(prefix="/api/v1/battles", tags=["battles"])
 
 PROVIDERS = ["cartesia", "elevenlabs", "smallestai", "deepgram"]
 S2S_PROVIDERS = ["openai", "hume"]
+STT_PROVIDERS = ["openai", "deepgram", "assemblyai", "google"]
 
 VALID_BATTLE_TYPES = {"tts", "stt", "s2s", "agent"}
 
 
-@router.post("/generate", response_model=BattleGenerateResponse)
+@router.post("/generate")
 async def generate_battle(
     body: BattleGenerateRequest | None = None,
     db: AsyncSession = Depends(get_db),
@@ -36,12 +38,16 @@ async def generate_battle(
     battle_type = body.battle_type if body else "tts"
     if battle_type not in VALID_BATTLE_TYPES:
         raise HTTPException(status_code=400, detail=f"battle_type must be one of {VALID_BATTLE_TYPES}")
-    if battle_type not in ("tts", "s2s"):
+    if battle_type not in ("tts", "s2s", "stt"):
         raise HTTPException(status_code=501, detail=f"{battle_type} battles are not yet implemented")
 
     # --- S2S: Step 1 — select models, return setup response ---
     if battle_type == "s2s":
         return await _generate_s2s_battle(db)
+
+    # --- STT: Step 1 — select models, return setup response ---
+    if battle_type == "stt":
+        return await _generate_stt_battle(db)
 
     # 1. Pick random prompt
     prompt_count = (await db.execute(select(func.count(Prompt.id)))).scalar_one()
@@ -326,6 +332,286 @@ async def vote_battle(
     await db.commit()
     await db.refresh(battle)
     return battle
+
+
+# ---------------------------------------------------------------------------
+# STT helpers and endpoints
+# ---------------------------------------------------------------------------
+
+async def _generate_stt_battle(db: AsyncSession) -> STTBattleSetupResponse:
+    """Step 1: Select STT models, create battle, return setup response."""
+    from app.models.audio_clip import AudioClip
+
+    all_models_result = await db.execute(
+        select(VoiceModel)
+        .where(VoiceModel.config_json.isnot(None))
+        .where(VoiceModel.model_type == "stt")
+    )
+    all_models = all_models_result.scalars().all()
+
+    by_provider: dict[str, list] = {}
+    for m in all_models:
+        by_provider.setdefault(m.provider, []).append(m)
+
+    selected = []
+    for provider in STT_PROVIDERS:
+        models = by_provider.get(provider, [])
+        if models:
+            selected.append(random.choice(models))
+
+    if len(selected) < 2:
+        raise HTTPException(status_code=500, detail="Need STT models from at least 2 providers. Run seed.py first.")
+
+    random.shuffle(selected)
+    selected = selected[:4]
+
+    from app.models.scenario import Scenario
+    scenario_result = await db.execute(select(Scenario.id).limit(1))
+    scenario_id = scenario_result.scalar_one_or_none()
+    if not scenario_id:
+        raise HTTPException(status_code=500, detail="No scenarios in database. Run seed.py first.")
+
+    battle = Battle(
+        scenario_id=scenario_id,
+        battle_type="stt",
+        model_a_id=selected[0].id,
+        model_b_id=selected[1].id,
+        model_c_id=selected[2].id if len(selected) > 2 else None,
+        model_d_id=selected[3].id if len(selected) > 3 else None,
+    )
+    db.add(battle)
+    await db.commit()
+    await db.refresh(battle)
+
+    clips_result = await db.execute(select(AudioClip))
+    clips = clips_result.scalars().all()
+    curated_items = [
+        AudioClipItem(
+            id=c.id,
+            text=c.ground_truth,
+            category=c.category,
+            difficulty=c.difficulty,
+            audio_url=f"/api/v1/audio/{c.audio_path.split('/')[-1]}" if c.audio_path else "",
+            duration_seconds=c.duration_seconds,
+        )
+        for c in clips
+    ] if clips else None
+
+    return STTBattleSetupResponse(
+        id=battle.id,
+        battle_type="stt",
+        model_count=len(selected),
+        curated_clips=curated_items,
+    )
+
+
+@router.post("/{battle_id}/stt-transcribe", response_model=STTBattleResponse)
+async def submit_stt_input_audio(
+    battle_id: str,
+    audio: UploadFile | None = File(None),
+    curated_clip_id: str | None = Form(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Step 2: Submit input audio for an STT battle, fan out to providers."""
+    from app.services.stt_service import transcribe_with_provider
+    from app.models.audio_clip import AudioClip
+    import os
+    import uuid as _uuid
+
+    result = await db.execute(select(Battle).where(Battle.id == battle_id))
+    battle = result.scalar_one_or_none()
+    if not battle:
+        raise HTTPException(status_code=404, detail="Battle not found")
+    if battle.battle_type != "stt":
+        raise HTTPException(status_code=400, detail="Battle is not STT type")
+    if battle.input_audio_path is not None:
+        raise HTTPException(status_code=400, detail="Input audio already submitted")
+
+    ground_truth = None
+    if audio:
+        os.makedirs(settings.audio_storage_path, exist_ok=True)
+        input_filename = f"{_uuid.uuid4()}.webm"
+        input_path = os.path.join(settings.audio_storage_path, input_filename)
+        content = await audio.read()
+        with open(input_path, "wb") as f:
+            f.write(content)
+    elif curated_clip_id:
+        clip_result = await db.execute(
+            select(AudioClip).where(AudioClip.id == curated_clip_id)
+        )
+        clip = clip_result.scalar_one_or_none()
+        if not clip or not clip.audio_path:
+            raise HTTPException(status_code=404, detail="Curated clip not found")
+        input_path = clip.audio_path
+        input_filename = input_path.split("/")[-1]
+        ground_truth = clip.ground_truth
+    else:
+        raise HTTPException(status_code=400, detail="Must provide either audio file or curated_clip_id")
+
+    battle.input_audio_path = input_path
+    await db.flush()
+
+    model_ids = [battle.model_a_id, battle.model_b_id]
+    if battle.model_c_id:
+        model_ids.append(battle.model_c_id)
+    if battle.model_d_id:
+        model_ids.append(battle.model_d_id)
+
+    models_result = await db.execute(
+        select(VoiceModel).where(VoiceModel.id.in_(model_ids))
+    )
+    models_map = {m.id: m for m in models_result.scalars().all()}
+    models_ordered = [models_map[mid] for mid in model_ids]
+
+    stt_tasks = [
+        transcribe_with_provider(
+            input_path,
+            model.provider,
+            model.config_json.get("model_id", model.name),
+            model.config_json or {},
+        )
+        for model in models_ordered
+    ]
+    all_results = await asyncio.gather(*stt_tasks, return_exceptions=True)
+
+    ok_models = []
+    ok_results = []
+    for model, res in zip(models_ordered, all_results):
+        if isinstance(res, Exception):
+            logger.error("STT failed for %s/%s: %s", model.provider, model.name, res)
+            continue
+        ok_models.append(model)
+        ok_results.append(res)
+
+    if len(ok_models) < 2:
+        raise HTTPException(status_code=500, detail="STT transcription failed for too many providers")
+
+    evals = []
+    for i, model in enumerate(ok_models):
+        ev = Evaluation(
+            model_id=model.id,
+            status="completed",
+            audio_path=input_path,
+            transcript_output=ok_results[i]["transcript"],
+            transcript_ref=ground_truth,
+        )
+        db.add(ev)
+        evals.append(ev)
+    await db.flush()
+
+    battle.model_a_id = ok_models[0].id
+    battle.model_b_id = ok_models[1].id
+    battle.model_c_id = ok_models[2].id if len(ok_models) > 2 else None
+    battle.model_d_id = ok_models[3].id if len(ok_models) > 3 else None
+    battle.eval_a_id = evals[0].id
+    battle.eval_b_id = evals[1].id
+    battle.eval_c_id = evals[2].id if len(evals) > 2 else None
+    battle.eval_d_id = evals[3].id if len(evals) > 3 else None
+
+    await db.commit()
+    await db.refresh(battle)
+
+    transcripts = []
+    labels = ["a", "b", "c", "d"]
+    for i, (model, result_data) in enumerate(zip(ok_models, ok_results)):
+        transcripts.append(STTTranscriptItem(
+            model_id=labels[i],
+            transcript=result_data["transcript"],
+            word_count=result_data["word_count"],
+            e2e_latency_ms=result_data["e2e_latency_ms"],
+            ttfb_ms=result_data["ttfb_ms"],
+        ))
+
+    return STTBattleResponse(
+        id=battle.id,
+        battle_type="stt",
+        input_audio_url=f"/api/v1/audio/{input_filename}",
+        ground_truth=None,
+        transcripts=transcripts,
+    )
+
+
+@router.get("/{battle_id}/stt-metrics", response_model=STTMetricsResponse)
+async def get_stt_metrics(battle_id: str, db: AsyncSession = Depends(get_db)):
+    """Post-vote metrics for STT battles with diff highlighting and WER/CER."""
+    from app.services.stt_metrics import compute_wer, compute_cer, compute_word_diff
+    from app.models.audio_clip import AudioClip
+
+    result = await db.execute(select(Battle).where(Battle.id == battle_id))
+    battle = result.scalar_one_or_none()
+    if not battle:
+        raise HTTPException(status_code=404, detail="Battle not found")
+    if battle.battle_type != "stt":
+        raise HTTPException(status_code=400, detail="Battle is not STT type")
+    if battle.winner is None:
+        raise HTTPException(status_code=400, detail="Battle has not been voted on yet")
+
+    eval_ids = [battle.eval_a_id, battle.eval_b_id, battle.eval_c_id, battle.eval_d_id]
+    eval_ids = [eid for eid in eval_ids if eid]
+    evals_result = await db.execute(
+        select(Evaluation).where(Evaluation.id.in_(eval_ids))
+    )
+    evals_map = {e.id: e for e in evals_result.scalars().all()}
+
+    model_ids = [battle.model_a_id, battle.model_b_id, battle.model_c_id, battle.model_d_id]
+    model_ids = [mid for mid in model_ids if mid]
+    models_result = await db.execute(
+        select(VoiceModel).where(VoiceModel.id.in_(model_ids))
+    )
+    models_map = {m.id: m for m in models_result.scalars().all()}
+
+    ground_truth = None
+    if battle.input_audio_path:
+        clip_result = await db.execute(
+            select(AudioClip).where(AudioClip.audio_path == battle.input_audio_path)
+        )
+        clip = clip_result.scalar_one_or_none()
+        if clip:
+            ground_truth = clip.ground_truth
+
+    labels = ["a", "b", "c", "d"]
+    eval_id_map = {"a": battle.eval_a_id, "b": battle.eval_b_id, "c": battle.eval_c_id, "d": battle.eval_d_id}
+    model_id_map = {"a": battle.model_a_id, "b": battle.model_b_id, "c": battle.model_c_id, "d": battle.model_d_id}
+
+    active_labels = [l for l in labels if model_id_map.get(l)]
+
+    model_names = {}
+    providers = {}
+    metrics = {}
+
+    for label in active_labels:
+        mid = model_id_map.get(label)
+        if mid and mid in models_map:
+            model_names[label] = models_map[mid].name
+            providers[label] = models_map[mid].provider
+
+        eid = eval_id_map.get(label)
+        if eid and eid in evals_map:
+            ev = evals_map[eid]
+            transcript = ev.transcript_output or ""
+
+            m = STTModelMetrics(
+                transcript=transcript,
+                e2e_latency_ms=0,
+                ttfb_ms=0,
+                word_count=len(transcript.split()),
+            )
+
+            if ground_truth:
+                m.wer = round(compute_wer(ground_truth, transcript), 4)
+                m.cer = round(compute_cer(ground_truth, transcript), 4)
+                diff_data = compute_word_diff(ground_truth, transcript)
+                m.diff = [STTDiffItem(**d) for d in diff_data]
+
+            metrics[label] = m
+
+    return STTMetricsResponse(
+        status="complete",
+        model_names=model_names or None,
+        providers=providers or None,
+        ground_truth=ground_truth,
+        metrics=metrics or None,
+    )
 
 
 # ---------------------------------------------------------------------------

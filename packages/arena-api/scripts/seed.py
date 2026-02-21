@@ -2,7 +2,7 @@
 import asyncio
 from sqlalchemy import select
 from app.database import engine, async_session
-from app.models import Base, VoiceModel, Scenario, Prompt
+from app.models import Base, VoiceModel, Scenario, Prompt, AudioClip
 
 
 # Cartesia Sonic-3 voices — diverse set for voice agent arena battles
@@ -458,6 +458,47 @@ MODELS = [
             "description": "Hume EVI 2 empathic voice interface",
         },
     },
+    # --- STT Models ---
+    {
+        "name": "Whisper Large V3",
+        "provider": "openai",
+        "version": "whisper-1",
+        "model_type": "stt",
+        "config_json": {
+            "model_id": "whisper-1",
+            "description": "OpenAI Whisper large-v3 speech recognition",
+        },
+    },
+    {
+        "name": "Deepgram Nova-2",
+        "provider": "deepgram",
+        "version": "nova-2",
+        "model_type": "stt",
+        "config_json": {
+            "model_id": "nova-2",
+            "description": "Deepgram Nova-2 high-accuracy speech recognition",
+        },
+    },
+    {
+        "name": "AssemblyAI Universal",
+        "provider": "assemblyai",
+        "version": "universal",
+        "model_type": "stt",
+        "config_json": {
+            "model_id": "best",
+            "description": "AssemblyAI Universal speech-to-text model",
+        },
+    },
+    {
+        "name": "Google Cloud STT",
+        "provider": "google",
+        "version": "latest_long",
+        "model_type": "stt",
+        "config_json": {
+            "model_id": "latest_long",
+            "description": "Google Cloud Speech-to-Text v1",
+        },
+    },
 ]
 
 SCENARIOS = [
@@ -608,6 +649,106 @@ S2S_PROMPTS = [
     },
 ]
 
+# Curated audio clips for STT battles (ground truth = source text for TTS generation)
+STT_CLIPS = [
+    {
+        "ground_truth": "Thank you for calling customer support. My name is Sarah and I'll be happy to help you today. Could you please provide me with your account number?",
+        "category": "clean_speech",
+        "difficulty": "easy",
+        "audio_path": "./uploads/clips/clean_support_greeting.wav",
+        "duration_seconds": 8.5,
+        "tags": {"gender": "female", "accent": "american"},
+    },
+    {
+        "ground_truth": "I'm sorry to hear that your package arrived damaged. Let me file a replacement order for you right away. The new item should arrive within three to five business days.",
+        "category": "clean_speech",
+        "difficulty": "easy",
+        "audio_path": "./uploads/clips/clean_replacement_order.wav",
+        "duration_seconds": 9.0,
+        "tags": {"gender": "male", "accent": "american"},
+    },
+    {
+        "ground_truth": "Your total comes to forty seven dollars and ninety three cents. That includes tax. Would you like to pay with the Visa ending in four two one eight or use a different method?",
+        "category": "numbers_entities",
+        "difficulty": "medium",
+        "audio_path": "./uploads/clips/numbers_payment.wav",
+        "duration_seconds": 9.5,
+        "tags": {"type": "financial"},
+    },
+    {
+        "ground_truth": "The prescription for amoxicillin five hundred milligrams should be taken three times daily for ten days. Please contact Doctor Patel at extension seven four two if symptoms persist.",
+        "category": "domain_jargon",
+        "difficulty": "hard",
+        "audio_path": "./uploads/clips/medical_prescription.wav",
+        "duration_seconds": 10.0,
+        "tags": {"domain": "medical"},
+    },
+    {
+        "ground_truth": "Please navigate to one twenty three Main Street, Suite four hundred B, Springfield, Illinois, six two seven zero four. The building is on the corner of Main and Fifth Avenue.",
+        "category": "numbers_entities",
+        "difficulty": "hard",
+        "audio_path": "./uploads/clips/numbers_address.wav",
+        "duration_seconds": 10.5,
+        "tags": {"type": "address"},
+    },
+    {
+        "ground_truth": "So basically what happened was like I went to the store right and they told me that my warranty had expired which is totally ridiculous because I just bought it like three months ago.",
+        "category": "fast_speech",
+        "difficulty": "medium",
+        "audio_path": "./uploads/clips/fast_warranty_complaint.wav",
+        "duration_seconds": 8.0,
+        "tags": {"style": "conversational"},
+    },
+    {
+        "ground_truth": "The API endpoint at slash v two slash users requires an OAuth two bearer token in the authorization header. Make sure to include the content type application slash JSON.",
+        "category": "domain_jargon",
+        "difficulty": "hard",
+        "audio_path": "./uploads/clips/technical_api.wav",
+        "duration_seconds": 9.5,
+        "tags": {"domain": "technology"},
+    },
+    {
+        "ground_truth": "Good morning! I'd like to check in for my flight to New York. My confirmation code is bravo romeo seven four kilo papa. The flight departs at two fifteen PM.",
+        "category": "clean_speech",
+        "difficulty": "medium",
+        "audio_path": "./uploads/clips/clean_flight_checkin.wav",
+        "duration_seconds": 9.0,
+        "tags": {"type": "travel"},
+    },
+    {
+        "ground_truth": "We need to schedule a follow-up appointment. I have availability next Tuesday at ten thirty AM or Wednesday at two PM. Which works better for you?",
+        "category": "clean_speech",
+        "difficulty": "easy",
+        "audio_path": "./uploads/clips/clean_appointment.wav",
+        "duration_seconds": 7.5,
+        "tags": {"type": "scheduling"},
+    },
+    {
+        "ground_truth": "The quarterly revenue report shows a twelve point five percent increase year over year. Net income was fourteen point three million dollars compared to eleven point eight million in the prior quarter.",
+        "category": "numbers_entities",
+        "difficulty": "hard",
+        "audio_path": "./uploads/clips/numbers_financial.wav",
+        "duration_seconds": 11.0,
+        "tags": {"domain": "finance"},
+    },
+    {
+        "ground_truth": "Hi yes I was wondering if you could help me I purchased a laptop last week the model number is XPS fifteen ninety five twenty and the screen has some dead pixels.",
+        "category": "fast_speech",
+        "difficulty": "medium",
+        "audio_path": "./uploads/clips/fast_laptop_issue.wav",
+        "duration_seconds": 8.5,
+        "tags": {"style": "conversational"},
+    },
+    {
+        "ground_truth": "For this recipe you'll need two cups of all-purpose flour, one and a half teaspoons of baking powder, half a teaspoon of salt, and three quarters cup of unsalted butter.",
+        "category": "numbers_entities",
+        "difficulty": "medium",
+        "audio_path": "./uploads/clips/numbers_recipe.wav",
+        "duration_seconds": 9.0,
+        "tags": {"type": "cooking"},
+    },
+]
+
 
 async def seed():
     async with engine.begin() as conn:
@@ -642,6 +783,15 @@ async def seed():
                 db.add(Prompt(**p))
                 s2s_prompts_added += 1
 
+        clips_added = 0
+        for c in STT_CLIPS:
+            existing = await db.execute(
+                select(AudioClip).where(AudioClip.ground_truth == c["ground_truth"]).limit(1)
+            )
+            if existing.scalars().first() is None:
+                db.add(AudioClip(**c))
+                clips_added += 1
+
         await db.commit()
         providers = {}
         for m in MODELS:
@@ -651,7 +801,8 @@ async def seed():
             f"Seeded {models_added}/{len(MODELS)} voices ({provider_str}), "
             f"{scenarios_added}/{len(SCENARIOS)} scenarios, "
             f"{prompts_added}/{len(PROMPTS)} TTS prompts, "
-            f"and {s2s_prompts_added}/{len(S2S_PROMPTS)} S2S curated prompts."
+            f"{s2s_prompts_added}/{len(S2S_PROMPTS)} S2S curated prompts, "
+            f"and {clips_added}/{len(STT_CLIPS)} STT audio clips."
         )
 
 
