@@ -75,6 +75,7 @@ export default function BattlePage() {
   const allPlayed = activeModels.every((m) => hasPlayed[m])
 
   const loadBattle = useCallback(async () => {
+    if (battleMode !== 'tts') return // Sub-pages handle their own API calls
     setLoading(true)
     setError(null)
     setBattle(null)
