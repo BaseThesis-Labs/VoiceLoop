@@ -5,12 +5,15 @@ import random
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.config import settings
 from app.database import get_db
 from app.models.battle import Battle
 from app.models.evaluation import Evaluation
 from app.models.prompt import Prompt
 from app.models.voice_model import VoiceModel
+from fastapi import File, Form, UploadFile
 from app.schemas.battle import BattleCreate, BattleVote, BattleResponse, BattleGenerateResponse, BattleGenerateRequest
+from app.schemas.s2s import CuratedPromptItem, S2SBattleSetupResponse, S2SBattleResponse, S2SMetricsResponse, S2SModelMetrics
 from app.services.elo import update_elo
 from app.services.tts_service import generate_tts
 
@@ -19,6 +22,7 @@ logger = logging.getLogger("arena.battles")
 router = APIRouter(prefix="/api/v1/battles", tags=["battles"])
 
 PROVIDERS = ["cartesia", "elevenlabs", "smallestai", "deepgram"]
+S2S_PROVIDERS = ["openai", "hume"]
 
 VALID_BATTLE_TYPES = {"tts", "stt", "s2s", "agent"}
 
@@ -32,8 +36,12 @@ async def generate_battle(
     battle_type = body.battle_type if body else "tts"
     if battle_type not in VALID_BATTLE_TYPES:
         raise HTTPException(status_code=400, detail=f"battle_type must be one of {VALID_BATTLE_TYPES}")
-    if battle_type != "tts":
+    if battle_type not in ("tts", "s2s"):
         raise HTTPException(status_code=501, detail=f"{battle_type} battles are not yet implemented")
+
+    # --- S2S: Step 1 — select models, return setup response ---
+    if battle_type == "s2s":
+        return await _generate_s2s_battle(db)
 
     # 1. Pick random prompt
     prompt_count = (await db.execute(select(func.count(Prompt.id)))).scalar_one()
@@ -318,3 +326,306 @@ async def vote_battle(
     await db.commit()
     await db.refresh(battle)
     return battle
+
+
+# ---------------------------------------------------------------------------
+# S2S helpers and endpoints
+# ---------------------------------------------------------------------------
+
+async def _generate_s2s_battle(db: AsyncSession) -> S2SBattleSetupResponse:
+    """Step 1: Select S2S models, create battle, return setup response."""
+    # Query S2S models
+    all_models_result = await db.execute(
+        select(VoiceModel)
+        .where(VoiceModel.config_json.isnot(None))
+        .where(VoiceModel.model_type == "s2s")
+    )
+    all_models = all_models_result.scalars().all()
+
+    # Group by provider, pick one random model per provider
+    by_provider: dict[str, list] = {}
+    for m in all_models:
+        by_provider.setdefault(m.provider, []).append(m)
+
+    selected = []
+    for provider in S2S_PROVIDERS:
+        models = by_provider.get(provider, [])
+        if models:
+            selected.append(random.choice(models))
+
+    if len(selected) < 2:
+        raise HTTPException(status_code=500, detail="Need S2S models from at least 2 providers. Run seed.py first.")
+
+    # Shuffle so position doesn't reveal provider
+    random.shuffle(selected)
+    # Take 2-3 models max
+    selected = selected[:3]
+
+    # Create Battle record (no evals yet — they come in step 2)
+    from app.models.scenario import Scenario
+    scenario_result = await db.execute(select(Scenario.id).limit(1))
+    scenario_id = scenario_result.scalar_one_or_none()
+    if not scenario_id:
+        raise HTTPException(status_code=500, detail="No scenarios in database. Run seed.py first.")
+
+    battle = Battle(
+        scenario_id=scenario_id,
+        battle_type="s2s",
+        model_a_id=selected[0].id,
+        model_b_id=selected[1].id,
+        model_c_id=selected[2].id if len(selected) > 2 else None,
+    )
+    db.add(battle)
+    await db.commit()
+    await db.refresh(battle)
+
+    # Fetch curated S2S prompts
+    curated_result = await db.execute(
+        select(Prompt).where(Prompt.prompt_type == "audio")
+    )
+    curated_prompts = curated_result.scalars().all()
+    curated_items = [
+        CuratedPromptItem(
+            id=p.id,
+            text=p.text,
+            category=p.category,
+            audio_url=f"/api/v1/audio/{p.audio_path.split('/')[-1]}" if p.audio_path else "",
+            duration_seconds=p.duration_seconds,
+        )
+        for p in curated_prompts
+    ] if curated_prompts else None
+
+    return S2SBattleSetupResponse(
+        id=battle.id,
+        battle_type="s2s",
+        model_count=len(selected),
+        curated_prompts=curated_items,
+    )
+
+
+@router.post("/{battle_id}/input-audio", response_model=S2SBattleResponse)
+async def submit_s2s_input_audio(
+    battle_id: str,
+    audio: UploadFile | None = File(None),
+    curated_prompt_id: str | None = Form(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Step 2: Submit input audio for an S2S battle, fan out to providers."""
+    from app.services.s2s_service import generate_s2s, S2SProviderError
+    from app.services.transcription_service import transcribe_audio
+    import os
+    import uuid as _uuid
+
+    # 1. Load battle
+    result = await db.execute(select(Battle).where(Battle.id == battle_id))
+    battle = result.scalar_one_or_none()
+    if not battle:
+        raise HTTPException(status_code=404, detail="Battle not found")
+    if battle.battle_type != "s2s":
+        raise HTTPException(status_code=400, detail="Battle is not S2S type")
+    if battle.input_audio_path is not None:
+        raise HTTPException(status_code=400, detail="Input audio already submitted")
+
+    # 2. Determine input source
+    if audio:
+        os.makedirs(settings.audio_storage_path, exist_ok=True)
+        input_filename = f"{_uuid.uuid4()}.webm"
+        input_path = os.path.join(settings.audio_storage_path, input_filename)
+        content = await audio.read()
+        with open(input_path, "wb") as f:
+            f.write(content)
+    elif curated_prompt_id:
+        prompt_result = await db.execute(
+            select(Prompt).where(Prompt.id == curated_prompt_id)
+        )
+        prompt = prompt_result.scalar_one_or_none()
+        if not prompt or not prompt.audio_path:
+            raise HTTPException(status_code=404, detail="Curated prompt not found or has no audio")
+        input_path = prompt.audio_path
+        input_filename = input_path.split("/")[-1]
+    else:
+        raise HTTPException(status_code=400, detail="Must provide either audio file or curated_prompt_id")
+
+    # Store input audio path
+    battle.input_audio_path = input_path
+    await db.flush()
+
+    # 3. Load selected models
+    model_ids = [battle.model_a_id, battle.model_b_id]
+    if battle.model_c_id:
+        model_ids.append(battle.model_c_id)
+
+    models_result = await db.execute(
+        select(VoiceModel).where(VoiceModel.id.in_(model_ids))
+    )
+    models_map = {m.id: m for m in models_result.scalars().all()}
+    models_ordered = [models_map[mid] for mid in model_ids]
+
+    # 4. Fan out to providers + transcription in parallel
+    s2s_tasks = [
+        generate_s2s(
+            input_path,
+            model.provider,
+            model.config_json.get("model_id", model.name),
+            model.config_json or {},
+        )
+        for model in models_ordered
+    ]
+    transcript_task = transcribe_audio(input_path)
+    all_results = await asyncio.gather(*s2s_tasks, transcript_task, return_exceptions=True)
+
+    s2s_results = all_results[:-1]
+    transcript = all_results[-1] if not isinstance(all_results[-1], Exception) else None
+
+    # 5. Filter out failed models (need >= 2 successful)
+    ok_models = []
+    ok_results = []
+    for model, res in zip(models_ordered, s2s_results):
+        if isinstance(res, Exception):
+            logger.error("S2S failed for %s/%s: %s", model.provider, model.name, res)
+            continue
+        ok_models.append(model)
+        ok_results.append(res)
+
+    if len(ok_models) < 2:
+        raise HTTPException(status_code=500, detail="S2S generation failed for too many providers")
+
+    # 6. Create Evaluation records
+    evals = []
+    for i, model in enumerate(ok_models):
+        ev = Evaluation(
+            model_id=model.id,
+            status="pending",
+            audio_path=ok_results[i]["audio_path"],
+            duration_seconds=ok_results[i]["duration_seconds"],
+        )
+        db.add(ev)
+        evals.append(ev)
+    await db.flush()
+
+    # 7. Update Battle with eval IDs and potentially reduced model set
+    battle.model_a_id = ok_models[0].id
+    battle.model_b_id = ok_models[1].id
+    battle.model_c_id = ok_models[2].id if len(ok_models) > 2 else None
+    battle.eval_a_id = evals[0].id
+    battle.eval_b_id = evals[1].id
+    battle.eval_c_id = evals[2].id if len(evals) > 2 else None
+
+    await db.commit()
+    await db.refresh(battle)
+
+    # 8. Kick off background eval tasks
+    try:
+        from app.services.eval_service import submit_evaluation
+        for ev in evals:
+            asyncio.create_task(submit_evaluation(ev.id))
+    except Exception as e:
+        logger.warning("Background eval failed to start: %s", e)
+
+    # 9. Build response
+    resp = S2SBattleResponse(
+        id=battle.id,
+        battle_type="s2s",
+        input_audio_url=f"/api/v1/audio/{input_filename}",
+        input_transcript=transcript,
+        audio_a_url=f"/api/v1/audio/{ok_results[0]['filename']}",
+        audio_b_url=f"/api/v1/audio/{ok_results[1]['filename']}",
+        model_a_id=ok_models[0].id,
+        model_b_id=ok_models[1].id,
+        e2e_latency_a=ok_results[0]["e2e_latency_ms"],
+        e2e_latency_b=ok_results[1]["e2e_latency_ms"],
+        ttfb_a=ok_results[0]["ttfb_ms"],
+        ttfb_b=ok_results[1]["ttfb_ms"],
+        duration_a=ok_results[0]["duration_seconds"],
+        duration_b=ok_results[1]["duration_seconds"],
+    )
+
+    if len(ok_models) > 2:
+        resp.audio_c_url = f"/api/v1/audio/{ok_results[2]['filename']}"
+        resp.model_c_id = ok_models[2].id
+        resp.e2e_latency_c = ok_results[2]["e2e_latency_ms"]
+        resp.ttfb_c = ok_results[2]["ttfb_ms"]
+        resp.duration_c = ok_results[2]["duration_seconds"]
+
+    return resp
+
+
+@router.get("/{battle_id}/metrics", response_model=S2SMetricsResponse)
+async def get_battle_metrics(battle_id: str, db: AsyncSession = Depends(get_db)):
+    """Post-vote progressive metrics endpoint for S2S battles."""
+    result = await db.execute(select(Battle).where(Battle.id == battle_id))
+    battle = result.scalar_one_or_none()
+    if not battle:
+        raise HTTPException(status_code=404, detail="Battle not found")
+    if battle.winner is None:
+        raise HTTPException(status_code=400, detail="Battle has not been voted on yet")
+
+    # Load evaluations
+    eval_ids = [battle.eval_a_id, battle.eval_b_id]
+    if battle.eval_c_id:
+        eval_ids.append(battle.eval_c_id)
+    eval_ids = [eid for eid in eval_ids if eid]
+
+    evals_result = await db.execute(
+        select(Evaluation).where(Evaluation.id.in_(eval_ids))
+    )
+    evals_map = {e.id: e for e in evals_result.scalars().all()}
+
+    # Load model names
+    model_ids = [battle.model_a_id, battle.model_b_id]
+    if battle.model_c_id:
+        model_ids.append(battle.model_c_id)
+
+    models_result = await db.execute(
+        select(VoiceModel).where(VoiceModel.id.in_(model_ids))
+    )
+    models_map = {m.id: m for m in models_result.scalars().all()}
+
+    # Determine status
+    labels = ["a", "b"]
+    if battle.model_c_id:
+        labels.append("c")
+
+    eval_id_map = {"a": battle.eval_a_id, "b": battle.eval_b_id, "c": battle.eval_c_id}
+    model_id_map = {"a": battle.model_a_id, "b": battle.model_b_id, "c": battle.model_c_id}
+
+    completed_count = sum(
+        1 for label in labels
+        if eval_id_map.get(label) and evals_map.get(eval_id_map[label]) and evals_map[eval_id_map[label]].status == "completed"
+    )
+
+    if completed_count == len(labels):
+        status = "complete"
+    elif completed_count > 0:
+        status = "partial"
+    else:
+        status = "computing"
+
+    model_names = {}
+    providers = {}
+    metrics = {}
+
+    for label in labels:
+        mid = model_id_map.get(label)
+        if mid and mid in models_map:
+            model_names[label] = models_map[mid].name
+            providers[label] = models_map[mid].provider
+
+        eid = eval_id_map.get(label)
+        if eid and eid in evals_map:
+            ev = evals_map[eid]
+            m = S2SModelMetrics()
+            if ev.transcript_output:
+                m.transcript = ev.transcript_output
+            if ev.metrics_json:
+                m.utmos = ev.metrics_json.get("utmos")
+                m.prosody_score = ev.metrics_json.get("prosody_score")
+                m.relevance_score = ev.metrics_json.get("relevance_score")
+            metrics[label] = m
+
+    return S2SMetricsResponse(
+        status=status,
+        model_names=model_names or None,
+        providers=providers or None,
+        metrics=metrics or None,
+    )
