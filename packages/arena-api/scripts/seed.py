@@ -564,87 +564,87 @@ PROMPTS = [
 # Curated audio prompts for S2S battles
 S2S_PROMPTS = [
     {
-        "text": "Hi, I'd like to book a table for two tonight at seven. Do you have anything available near the window?",
+        "text": "Hi, I'd like to book a table for four people this Saturday evening around seven thirty. Do you have anything available?",
         "category": "booking",
         "prompt_type": "audio",
-        "audio_path": "./uploads/prompts/booking_table.wav",
+        "audio_path": "./uploads/prompts/book_restaurant.wav",
         "duration_seconds": 5.2,
     },
     {
-        "text": "I've been having trouble with my internet connection all morning. Can you help me figure out what's going on?",
-        "category": "customer_support",
+        "text": "Can you check the status of my flight? It's United Airlines flight fourteen twenty-three from San Francisco to Chicago, departing today.",
+        "category": "general",
         "prompt_type": "audio",
-        "audio_path": "./uploads/prompts/internet_trouble.wav",
+        "audio_path": "./uploads/prompts/flight_status.wav",
         "duration_seconds": 5.8,
     },
     {
-        "text": "Can you give me directions to the nearest pharmacy? I'm currently at the corner of Main Street and Fifth Avenue.",
-        "category": "directions",
+        "text": "I'm having trouble connecting my printer to my WiFi network. It's an HP LaserJet Pro and I keep getting an error message saying network not found.",
+        "category": "customer_support",
         "prompt_type": "audio",
-        "audio_path": "./uploads/prompts/directions_pharmacy.wav",
+        "audio_path": "./uploads/prompts/tech_support.wav",
         "duration_seconds": 5.5,
     },
     {
-        "text": "I'd like to schedule an appointment with Doctor Chen for next Tuesday. Morning would work best for me.",
-        "category": "medical",
+        "text": "I need to schedule an oil change for my car. It's a twenty twenty-three Toyota Camry. Do you have any openings tomorrow afternoon?",
+        "category": "booking",
         "prompt_type": "audio",
-        "audio_path": "./uploads/prompts/medical_appointment.wav",
+        "audio_path": "./uploads/prompts/schedule_appointment.wav",
         "duration_seconds": 5.0,
     },
     {
-        "text": "Hey, what's the weather going to be like this weekend? I'm trying to plan an outdoor picnic.",
-        "category": "general",
-        "prompt_type": "audio",
-        "audio_path": "./uploads/prompts/weather_weekend.wav",
-        "duration_seconds": 4.5,
-    },
-    {
-        "text": "I received a damaged package and I'd like to request a replacement. My order number is seven eight nine four five.",
+        "text": "Hi, I placed an order last week and haven't received any shipping updates. My order number is seven eight nine four five six. Can you tell me where it is?",
         "category": "customer_support",
         "prompt_type": "audio",
-        "audio_path": "./uploads/prompts/damaged_package.wav",
+        "audio_path": "./uploads/prompts/order_status.wav",
         "duration_seconds": 5.8,
     },
     {
-        "text": "Can you recommend a good Italian restaurant nearby? I'm looking for something casual but with great pasta.",
-        "category": "general",
+        "text": "I need to file a claim for a fender bender that happened yesterday in the parking lot. No one was injured but there's damage to my rear bumper.",
+        "category": "customer_support",
         "prompt_type": "audio",
-        "audio_path": "./uploads/prompts/restaurant_recommend.wav",
+        "audio_path": "./uploads/prompts/insurance_claim.wav",
+        "duration_seconds": 5.8,
+    },
+    {
+        "text": "I'd like to refill my prescription for lisinopril ten milligrams. My date of birth is March fifteenth, nineteen eighty-five. The prescription number is RX four four seven.",
+        "category": "medical",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/pharmacy_refill.wav",
         "duration_seconds": 5.3,
     },
     {
-        "text": "I need to cancel my subscription but I want to make sure I won't lose any of my saved data first.",
+        "text": "I'm calling about my stay at your downtown location. The air conditioning in room three twelve hasn't been working since I checked in yesterday.",
         "category": "customer_support",
         "prompt_type": "audio",
-        "audio_path": "./uploads/prompts/cancel_subscription.wav",
+        "audio_path": "./uploads/prompts/hotel_complaint.wav",
         "duration_seconds": 5.5,
     },
     {
-        "text": "What time does the last train to downtown leave today? And is there a bus alternative if I miss it?",
-        "category": "directions",
+        "text": "I'd like to transfer five hundred dollars from my savings account to my checking account. Can you also tell me my current checking balance?",
+        "category": "general",
         "prompt_type": "audio",
-        "audio_path": "./uploads/prompts/train_schedule.wav",
+        "audio_path": "./uploads/prompts/banking_transfer.wav",
         "duration_seconds": 5.2,
     },
     {
-        "text": "I'd like to order a large pepperoni pizza with extra cheese for delivery. How long will it take?",
-        "category": "booking",
-        "prompt_type": "audio",
-        "audio_path": "./uploads/prompts/pizza_order.wav",
-        "duration_seconds": 4.8,
-    },
-    {
-        "text": "I'm feeling a bit under the weather. What are some home remedies for a sore throat and congestion?",
+        "text": "I've had a sore throat for about three days now and it's getting worse. I also have a slight fever. Should I come in for an appointment?",
         "category": "medical",
         "prompt_type": "audio",
         "audio_path": "./uploads/prompts/sore_throat.wav",
-        "duration_seconds": 5.5,
+        "duration_seconds": 4.8,
     },
     {
         "text": "Could you explain the difference between your basic and premium plans? I want to know what I get for the extra cost.",
         "category": "general",
         "prompt_type": "audio",
         "audio_path": "./uploads/prompts/plan_comparison.wav",
+        "duration_seconds": 5.5,
+    },
+    {
+        "text": "I'd like to return a pair of shoes I bought online last week. They don't fit properly. Do I need to bring them to the store or can I ship them back?",
+        "category": "customer_support",
+        "prompt_type": "audio",
+        "audio_path": "./uploads/prompts/return_item.wav",
         "duration_seconds": 5.8,
     },
 ]
@@ -956,9 +956,21 @@ async def seed():
         models_added = 0
         for m in MODELS:
             existing = await db.execute(select(VoiceModel).where(VoiceModel.name == m["name"]).limit(1))
-            if existing.scalars().first() is None:
+            existing_model = existing.scalars().first()
+            if existing_model is None:
                 db.add(VoiceModel(**m))
                 models_added += 1
+            else:
+                # Update model_type and config_json if they changed
+                changed = False
+                if existing_model.model_type != m.get("model_type", "tts"):
+                    existing_model.model_type = m["model_type"]
+                    changed = True
+                if m.get("config_json") and existing_model.config_json != m["config_json"]:
+                    existing_model.config_json = m["config_json"]
+                    changed = True
+                if changed:
+                    models_added += 1
 
         scenarios_added = 0
         for s in SCENARIOS:

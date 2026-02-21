@@ -113,57 +113,59 @@ async def _generate_openai_realtime(
     first_byte_time = None
     audio_chunks: list[bytes] = []
 
-    try:
-        async with asyncio.timeout(settings.s2s_timeout_seconds + 5):
-            async with websockets.connect(ws_url, additional_headers=headers) as ws:
-                # Configure session
-                voice_id = config.get("voice_id", "alloy")
+    async def _do_openai_ws():
+        nonlocal first_byte_time
+        async with websockets.connect(ws_url, additional_headers=headers) as ws:
+            # Configure session
+            voice_id = config.get("voice_id", "alloy")
+            await ws.send(json.dumps({
+                "type": "session.update",
+                "session": {
+                    "modalities": ["text", "audio"],
+                    "voice": voice_id,
+                    "input_audio_format": "pcm16",
+                    "output_audio_format": "pcm16",
+                    "input_audio_transcription": {"model": "whisper-1"},
+                },
+            }))
+
+            # Send input audio in chunks
+            chunk_size = 8192
+            for i in range(0, len(pcm_data), chunk_size):
+                chunk = pcm_data[i:i + chunk_size]
                 await ws.send(json.dumps({
-                    "type": "session.update",
-                    "session": {
-                        "modalities": ["text", "audio"],
-                        "voice": voice_id,
-                        "input_audio_format": "pcm16",
-                        "output_audio_format": "pcm16",
-                        "input_audio_transcription": {"model": "whisper-1"},
-                    },
+                    "type": "input_audio_buffer.append",
+                    "audio": base64.b64encode(chunk).decode(),
                 }))
 
-                # Send input audio in chunks
-                chunk_size = 8192
-                for i in range(0, len(pcm_data), chunk_size):
-                    chunk = pcm_data[i:i + chunk_size]
-                    await ws.send(json.dumps({
-                        "type": "input_audio_buffer.append",
-                        "audio": base64.b64encode(chunk).decode(),
-                    }))
+            # Commit and request response
+            await ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+            await ws.send(json.dumps({"type": "response.create"}))
 
-                # Commit and request response
-                await ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
-                await ws.send(json.dumps({"type": "response.create"}))
+            # Collect response audio
+            async for msg in ws:
+                event = json.loads(msg)
+                event_type = event.get("type", "")
 
-                # Collect response audio
-                async for msg in ws:
-                    event = json.loads(msg)
-                    event_type = event.get("type", "")
+                if event_type == "response.audio.delta":
+                    if first_byte_time is None:
+                        first_byte_time = time.perf_counter()
+                    audio_b64 = event.get("delta", "")
+                    if audio_b64:
+                        audio_chunks.append(base64.b64decode(audio_b64))
 
-                    if event_type == "response.audio.delta":
-                        if first_byte_time is None:
-                            first_byte_time = time.perf_counter()
-                        audio_b64 = event.get("delta", "")
-                        if audio_b64:
-                            audio_chunks.append(base64.b64decode(audio_b64))
+                elif event_type == "response.audio.done":
+                    break
 
-                    elif event_type == "response.audio.done":
-                        break
+                elif event_type == "response.done":
+                    break
 
-                    elif event_type == "response.done":
-                        break
+                elif event_type == "error":
+                    error_msg = event.get("error", {}).get("message", "Unknown error")
+                    raise S2SProviderError(f"OpenAI Realtime error: {error_msg}")
 
-                    elif event_type == "error":
-                        error_msg = event.get("error", {}).get("message", "Unknown error")
-                        raise S2SProviderError(f"OpenAI Realtime error: {error_msg}")
-
+    try:
+        await asyncio.wait_for(_do_openai_ws(), timeout=settings.s2s_timeout_seconds + 5)
     except asyncio.TimeoutError:
         raise S2SProviderError(f"OpenAI Realtime timed out after {settings.s2s_timeout_seconds}s")
     except websockets.exceptions.WebSocketException as e:
@@ -223,52 +225,53 @@ async def _generate_hume_evi(
 
     sample_rate = 24000
 
-    # Read input audio and base64-encode
-    with open(input_audio_path, "rb") as f:
-        input_bytes = f.read()
-    input_b64 = base64.b64encode(input_bytes).decode()
+    # Convert input audio to PCM and base64-encode in chunks
+    pcm_data = _convert_to_pcm(input_audio_path, sample_rate)
 
     config_id = config.get("config_id")
-    ws_url = f"wss://api.hume.ai/v0/evi/chat"
+    ws_url = f"wss://api.hume.ai/v0/evi/chat?api_key={api_key}"
     if config_id:
-        ws_url += f"?config_id={config_id}"
+        ws_url += f"&config_id={config_id}"
 
-    headers = {
-        "X-Hume-Api-Key": api_key,
-    }
+    headers = {}
 
     start_time = time.perf_counter()
     first_byte_time = None
     audio_chunks: list[bytes] = []
 
-    try:
-        async with asyncio.timeout(settings.s2s_timeout_seconds + 5):
-            async with websockets.connect(ws_url, additional_headers=headers) as ws:
-                # Send audio input
+    async def _do_hume_ws():
+        nonlocal first_byte_time
+        async with websockets.connect(ws_url, additional_headers=headers) as ws:
+            # Send audio input in chunks (~50ms at 24kHz = 2400 samples = 4800 bytes)
+            chunk_size = 4800
+            for i in range(0, len(pcm_data), chunk_size):
+                chunk = pcm_data[i:i + chunk_size]
                 await ws.send(json.dumps({
                     "type": "audio_input",
-                    "data": input_b64,
+                    "data": base64.b64encode(chunk).decode(),
                 }))
 
-                # Collect response
-                async for msg in ws:
-                    event = json.loads(msg)
-                    event_type = event.get("type", "")
+            # Collect response
+            async for msg in ws:
+                event = json.loads(msg)
+                event_type = event.get("type", "")
 
-                    if event_type == "audio_output":
-                        if first_byte_time is None:
-                            first_byte_time = time.perf_counter()
-                        audio_b64 = event.get("data", "")
-                        if audio_b64:
-                            audio_chunks.append(base64.b64decode(audio_b64))
+                if event_type == "audio_output":
+                    if first_byte_time is None:
+                        first_byte_time = time.perf_counter()
+                    audio_b64 = event.get("data", "")
+                    if audio_b64:
+                        audio_chunks.append(base64.b64decode(audio_b64))
 
-                    elif event_type == "assistant_end":
-                        break
+                elif event_type == "assistant_end":
+                    break
 
-                    elif event_type == "error":
-                        error_msg = event.get("message", "Unknown Hume error")
-                        raise S2SProviderError(f"Hume EVI error: {error_msg}")
+                elif event_type == "error":
+                    error_msg = event.get("message", "Unknown Hume error")
+                    raise S2SProviderError(f"Hume EVI error: {error_msg}")
 
+    try:
+        await asyncio.wait_for(_do_hume_ws(), timeout=settings.s2s_timeout_seconds + 5)
     except asyncio.TimeoutError:
         raise S2SProviderError(f"Hume EVI timed out after {settings.s2s_timeout_seconds}s")
     except websockets.exceptions.WebSocketException as e:

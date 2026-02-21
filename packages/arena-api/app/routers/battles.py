@@ -753,16 +753,25 @@ async def _generate_s2s_battle(db: AsyncSession) -> S2SBattleSetupResponse:
         select(Prompt).where(Prompt.prompt_type == "audio")
     )
     curated_prompts = curated_result.scalars().all()
-    curated_items = [
-        CuratedPromptItem(
-            id=p.id,
-            text=p.text,
-            category=p.category,
-            audio_url=f"/api/v1/audio/{p.audio_path.split('/')[-1]}" if p.audio_path else "",
-            duration_seconds=p.duration_seconds,
-        )
-        for p in curated_prompts
-    ] if curated_prompts else None
+    curated_items = []
+    if curated_prompts:
+        for p in curated_prompts:
+            if not p.audio_path:
+                continue
+            if not os.path.isfile(p.audio_path):
+                continue
+            rel = p.audio_path
+            if rel.startswith("./"):
+                rel = rel[2:]
+            if rel.startswith("uploads/"):
+                rel = rel[len("uploads/"):]
+            curated_items.append(CuratedPromptItem(
+                id=p.id,
+                text=p.text,
+                category=p.category,
+                audio_url=f"/api/v1/audio/{rel}",
+                duration_seconds=p.duration_seconds,
+            ))
 
     return S2SBattleSetupResponse(
         id=battle.id,
@@ -811,7 +820,14 @@ async def submit_s2s_input_audio(
         if not prompt or not prompt.audio_path:
             raise HTTPException(status_code=404, detail="Curated prompt not found or has no audio")
         input_path = prompt.audio_path
-        input_filename = input_path.split("/")[-1]
+        if not os.path.isfile(input_path):
+            raise HTTPException(status_code=404, detail="Curated prompt audio file not found on disk")
+        rel = input_path
+        if rel.startswith("./"):
+            rel = rel[2:]
+        if rel.startswith("uploads/"):
+            rel = rel[len("uploads/"):]
+        input_filename = rel
     else:
         raise HTTPException(status_code=400, detail="Must provide either audio file or curated_prompt_id")
 
@@ -856,8 +872,10 @@ async def submit_s2s_input_audio(
         ok_models.append(model)
         ok_results.append(res)
 
+    if len(ok_models) < 1:
+        raise HTTPException(status_code=500, detail="All S2S providers failed. Check API keys and connectivity.")
     if len(ok_models) < 2:
-        raise HTTPException(status_code=500, detail="S2S generation failed for too many providers")
+        logger.warning("Only %d S2S provider(s) succeeded out of %d", len(ok_models), len(models_ordered))
 
     # 6. Create Evaluation records
     evals = []
@@ -873,11 +891,11 @@ async def submit_s2s_input_audio(
     await db.flush()
 
     # 7. Update Battle with eval IDs and potentially reduced model set
-    battle.model_a_id = ok_models[0].id
-    battle.model_b_id = ok_models[1].id
+    battle.model_a_id = ok_models[0].id if len(ok_models) > 0 else None
+    battle.model_b_id = ok_models[1].id if len(ok_models) > 1 else None
     battle.model_c_id = ok_models[2].id if len(ok_models) > 2 else None
-    battle.eval_a_id = evals[0].id
-    battle.eval_b_id = evals[1].id
+    battle.eval_a_id = evals[0].id if len(evals) > 0 else None
+    battle.eval_b_id = evals[1].id if len(evals) > 1 else None
     battle.eval_c_id = evals[2].id if len(evals) > 2 else None
 
     await db.commit()
@@ -897,16 +915,16 @@ async def submit_s2s_input_audio(
         battle_type="s2s",
         input_audio_url=f"/api/v1/audio/{input_filename}",
         input_transcript=transcript,
-        audio_a_url=f"/api/v1/audio/{ok_results[0]['filename']}",
-        audio_b_url=f"/api/v1/audio/{ok_results[1]['filename']}",
-        model_a_id=ok_models[0].id,
-        model_b_id=ok_models[1].id,
-        e2e_latency_a=ok_results[0]["e2e_latency_ms"],
-        e2e_latency_b=ok_results[1]["e2e_latency_ms"],
-        ttfb_a=ok_results[0]["ttfb_ms"],
-        ttfb_b=ok_results[1]["ttfb_ms"],
-        duration_a=ok_results[0]["duration_seconds"],
-        duration_b=ok_results[1]["duration_seconds"],
+        audio_a_url=f"/api/v1/audio/{ok_results[0]['filename']}" if len(ok_results) > 0 else "",
+        audio_b_url=f"/api/v1/audio/{ok_results[1]['filename']}" if len(ok_results) > 1 else "",
+        model_a_id=ok_models[0].id if len(ok_models) > 0 else "",
+        model_b_id=ok_models[1].id if len(ok_models) > 1 else "",
+        e2e_latency_a=ok_results[0]["e2e_latency_ms"] if len(ok_results) > 0 else 0,
+        e2e_latency_b=ok_results[1]["e2e_latency_ms"] if len(ok_results) > 1 else 0,
+        ttfb_a=ok_results[0]["ttfb_ms"] if len(ok_results) > 0 else 0,
+        ttfb_b=ok_results[1]["ttfb_ms"] if len(ok_results) > 1 else 0,
+        duration_a=ok_results[0]["duration_seconds"] if len(ok_results) > 0 else 0,
+        duration_b=ok_results[1]["duration_seconds"] if len(ok_results) > 1 else 0,
     )
 
     if len(ok_models) > 2:
