@@ -1,4 +1,5 @@
 from sqlalchemy import String, Float, ForeignKey
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TimestampMixin, generate_uuid
 
@@ -19,3 +20,6 @@ class Battle(Base, TimestampMixin):
     winner: Mapped[str | None] = mapped_column(String, nullable=True)
     vote_source: Mapped[str | None] = mapped_column(String, nullable=True)
     elo_delta: Mapped[float | None] = mapped_column(Float, nullable=True)
+    battle_type: Mapped[str] = mapped_column(String, nullable=False, default="tts")
+    input_audio_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    sub_votes: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

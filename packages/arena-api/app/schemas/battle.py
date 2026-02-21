@@ -10,6 +10,7 @@ class BattleCreate(BaseModel):
 
 class BattleVote(BaseModel):
     winner: str  # "a", "b", "c", "d", "tie", or "all_bad"
+    sub_votes: dict[str, str] | None = None
 
 
 class BattleResponse(BaseModel):
@@ -26,13 +27,21 @@ class BattleResponse(BaseModel):
     winner: str | None
     vote_source: str | None
     elo_delta: float | None
+    battle_type: str = "tts"
+    input_audio_path: str | None = None
+    sub_votes: dict | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
+class BattleGenerateRequest(BaseModel):
+    battle_type: str = "tts"
+
+
 class BattleGenerateResponse(BaseModel):
     id: str
+    battle_type: str = "tts"
     prompt_text: str
     prompt_category: str
     audio_a_url: str

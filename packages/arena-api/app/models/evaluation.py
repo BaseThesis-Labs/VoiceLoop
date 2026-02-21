@@ -17,3 +17,4 @@ class Evaluation(Base, TimestampMixin):
     diarization_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    transcript_output: Mapped[str | None] = mapped_column(Text, nullable=True)

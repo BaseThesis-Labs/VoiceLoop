@@ -18,3 +18,4 @@ class LeaderboardSnapshot(Base):
     avg_quality: Mapped[float | None] = mapped_column(Float, nullable=True)
     rank: Mapped[int] = mapped_column(Integer, nullable=False)
     snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    battle_type: Mapped[str] = mapped_column(String, nullable=False, default="tts")

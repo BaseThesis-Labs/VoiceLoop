@@ -12,6 +12,7 @@ class VoiceModel(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String, nullable=False)
     provider: Mapped[str] = mapped_column(String, nullable=False)
     version: Mapped[str] = mapped_column(String, default="")
+    model_type: Mapped[str] = mapped_column(String, nullable=False, default="tts")
     config_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     elo_rating: Mapped[float] = mapped_column(Float, default=1500.0)
     total_battles: Mapped[int] = mapped_column(Integer, default=0)
