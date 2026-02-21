@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
@@ -8,6 +8,8 @@ from app.models.leaderboard import LeaderboardSnapshot
 
 router = APIRouter(prefix="/api/v1/leaderboard", tags=["leaderboard"])
 
+VALID_BATTLE_TYPES = {"tts", "stt", "s2s", "agent"}
+
 
 @router.get("")
 async def get_leaderboard(
@@ -15,6 +17,9 @@ async def get_leaderboard(
     battle_type: str = "tts",
     db: AsyncSession = Depends(get_db),
 ):
+    if battle_type not in VALID_BATTLE_TYPES:
+        raise HTTPException(status_code=400, detail=f"battle_type must be one of {VALID_BATTLE_TYPES}")
+
     result = await db.execute(
         select(VoiceModel)
         .where(VoiceModel.model_type == battle_type)
@@ -57,9 +62,14 @@ async def get_leaderboard(
 @router.get("/history")
 async def get_leaderboard_history(
     model_id: str | None = None,
+    battle_type: str = "tts",
     db: AsyncSession = Depends(get_db),
 ):
+    if battle_type not in VALID_BATTLE_TYPES:
+        raise HTTPException(status_code=400, detail=f"battle_type must be one of {VALID_BATTLE_TYPES}")
+
     stmt = select(LeaderboardSnapshot).order_by(LeaderboardSnapshot.snapshot_date.asc())
+    stmt = stmt.where(LeaderboardSnapshot.battle_type == battle_type)
     if model_id:
         stmt = stmt.where(LeaderboardSnapshot.model_id == model_id)
     result = await db.execute(stmt)

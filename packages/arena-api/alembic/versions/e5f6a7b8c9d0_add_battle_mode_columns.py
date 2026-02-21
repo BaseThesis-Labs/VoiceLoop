@@ -107,7 +107,7 @@ def upgrade() -> None:
 
     op.execute("""
         CREATE TRIGGER trg_check_battle_model_type
-            BEFORE INSERT OR UPDATE ON battles
+            BEFORE INSERT ON battles
             FOR EACH ROW
             EXECUTE FUNCTION check_battle_model_type_match();
     """)
