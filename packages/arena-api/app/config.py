@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     smallest_api_key: str = ""
     deepgram_api_key: str = ""
     elevenlabs_api_key: str = ""
+    openai_api_key: str = ""
+    hume_api_key: str = ""
+    s2s_timeout_seconds: int = 8
     enable_diarization: bool = True
     default_num_speakers: int = 2
     api_host: str = "0.0.0.0"
