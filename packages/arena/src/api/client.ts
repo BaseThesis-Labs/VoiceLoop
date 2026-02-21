@@ -179,6 +179,63 @@ export interface S2SMetrics {
   metrics: Record<string, S2SModelMetrics> | null;
 }
 
+// STT types
+export interface AudioClip {
+  id: string;
+  text: string;
+  category: string;
+  difficulty: string;
+  audio_url: string;
+  duration_seconds: number | null;
+}
+
+export interface STTBattleSetup {
+  id: string;
+  battle_type: string;
+  model_count: number;
+  curated_clips: AudioClip[] | null;
+}
+
+export interface STTTranscriptItem {
+  model_id: string;
+  transcript: string;
+  word_count: number;
+  e2e_latency_ms: number;
+  ttfb_ms: number;
+}
+
+export interface STTBattleResult {
+  id: string;
+  battle_type: string;
+  input_audio_url: string;
+  ground_truth: string | null;
+  transcripts: STTTranscriptItem[];
+}
+
+export interface STTDiffItem {
+  word: string | null;
+  ref_word: string | null;
+  type: 'correct' | 'insertion' | 'deletion' | 'substitution';
+}
+
+export interface STTModelMetrics {
+  transcript: string;
+  wer: number | null;
+  cer: number | null;
+  diff: STTDiffItem[] | null;
+  e2e_latency_ms: number;
+  ttfb_ms: number;
+  word_count: number;
+}
+
+export interface STTMetrics {
+  status: string;
+  model_names: Record<string, string> | null;
+  providers: Record<string, string> | null;
+  ground_truth: string | null;
+  metrics: Record<string, STTModelMetrics> | null;
+}
+
 export interface TTSGenerateRequest {
   model_id: string;
   text: string;
@@ -281,6 +338,31 @@ export const api = {
     },
     getMetrics: (battleId: string) =>
       request<S2SMetrics>(`/battles/${battleId}/metrics`),
+  },
+
+  stt: {
+    setup: () =>
+      request<STTBattleSetup>('/battles/generate', {
+        method: 'POST',
+        body: JSON.stringify({ battle_type: 'stt' }),
+      }),
+    submitAudio: async (
+      battleId: string,
+      audio: Blob | null,
+      curatedClipId?: string,
+    ): Promise<STTBattleResult> => {
+      const form = new FormData();
+      if (audio) form.append('audio', audio, 'recording.webm');
+      if (curatedClipId) form.append('curated_clip_id', curatedClipId);
+      const res = await fetch(`${API_BASE}/battles/${battleId}/stt-transcribe`, {
+        method: 'POST',
+        body: form,
+      });
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      return res.json() as Promise<STTBattleResult>;
+    },
+    getMetrics: (battleId: string) =>
+      request<STTMetrics>(`/battles/${battleId}/stt-metrics`),
   },
 
   tts: {
