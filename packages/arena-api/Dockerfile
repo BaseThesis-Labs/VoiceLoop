@@ -1,5 +1,8 @@
 FROM python:3.10-slim
 
+# Install system dependencies (ffmpeg needed for S2S audio conversion)
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 ENV PYTHONPATH=/app
 

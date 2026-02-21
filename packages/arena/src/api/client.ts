@@ -1,5 +1,19 @@
 const API_BASE = '/api/v1';
 
+// WebSocket URL helper: in production, connect directly to Railway backend
+// since Vercel rewrites don't proxy WebSocket connections.
+function getWsBaseUrl(): string {
+  const wsApiBase = import.meta.env.VITE_API_WS_URL as string | undefined;
+  if (wsApiBase) {
+    // Direct backend URL provided (production)
+    const base = wsApiBase.replace(/\/$/, '');
+    return `wss://${base.replace(/^https?:\/\//, '')}`;
+  }
+  // Development: use current host (Vite proxy handles WS)
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}`;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -351,8 +365,7 @@ export const api = {
       return res.json() as Promise<{ id: string; status: string }>;
     },
     stream: (evalId: string) => {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return new WebSocket(`${protocol}//${window.location.host}${API_BASE}/evaluations/${evalId}/stream`);
+      return new WebSocket(`${getWsBaseUrl()}${API_BASE}/evaluations/${evalId}/stream`);
     },
   },
 
@@ -441,8 +454,7 @@ export const api = {
     getMetrics: (battleId: string) =>
       request<AgentMetrics>(`/battles/${battleId}/agent-metrics`),
     getStreamUrl: (battleId: string, agent: 'a' | 'b') => {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      return `${protocol}//${window.location.host}${API_BASE}/battles/${battleId}/agent-stream?agent=${agent}`
+      return `${getWsBaseUrl()}${API_BASE}/battles/${battleId}/agent-stream?agent=${agent}`
     },
   },
 

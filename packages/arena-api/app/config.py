@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     default_num_speakers: int = 2
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174", "https://koecode.io", "https://www.koecode.io"]
+    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174", "https://koecode.io", "https://www.koecode.io", "https://voice-loop.vercel.app", "https://arena-api-production-964b.up.railway.app"]
     max_eval_workers: int = 2
     max_upload_size_mb: int = 50
     elo_k_factor: int = 32
