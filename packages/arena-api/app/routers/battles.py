@@ -10,7 +10,7 @@ from app.models.battle import Battle
 from app.models.evaluation import Evaluation
 from app.models.prompt import Prompt
 from app.models.voice_model import VoiceModel
-from app.schemas.battle import BattleCreate, BattleVote, BattleResponse, BattleGenerateResponse
+from app.schemas.battle import BattleCreate, BattleVote, BattleResponse, BattleGenerateResponse, BattleGenerateRequest
 from app.services.elo import update_elo
 from app.services.tts_service import generate_tts
 
@@ -20,10 +20,21 @@ router = APIRouter(prefix="/api/v1/battles", tags=["battles"])
 
 PROVIDERS = ["cartesia", "elevenlabs", "smallestai", "deepgram"]
 
+VALID_BATTLE_TYPES = {"tts", "stt", "s2s", "agent"}
+
 
 @router.post("/generate", response_model=BattleGenerateResponse)
-async def generate_battle(db: AsyncSession = Depends(get_db)):
+async def generate_battle(
+    body: BattleGenerateRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+):
     """Generate a new 4-model battle: pick random prompt + 1 voice per provider, generate TTS."""
+    battle_type = body.battle_type if body else "tts"
+    if battle_type not in VALID_BATTLE_TYPES:
+        raise HTTPException(status_code=400, detail=f"battle_type must be one of {VALID_BATTLE_TYPES}")
+    if battle_type != "tts":
+        raise HTTPException(status_code=501, detail=f"{battle_type} battles are not yet implemented")
+
     # 1. Pick random prompt
     prompt_count = (await db.execute(select(func.count(Prompt.id)))).scalar_one()
     if prompt_count == 0:
@@ -35,6 +46,7 @@ async def generate_battle(db: AsyncSession = Depends(get_db)):
     all_models_result = await db.execute(
         select(VoiceModel)
         .where(VoiceModel.config_json.isnot(None))
+        .where(VoiceModel.model_type == battle_type)
     )
     all_models = all_models_result.scalars().all()
 
@@ -112,6 +124,7 @@ async def generate_battle(db: AsyncSession = Depends(get_db)):
 
     battle = Battle(
         scenario_id=scenario_id,
+        battle_type=battle_type,
         model_a_id=selected[0].id,
         model_b_id=selected[1].id,
         model_c_id=selected[2].id if len(selected) > 2 else None,
@@ -136,6 +149,7 @@ async def generate_battle(db: AsyncSession = Depends(get_db)):
     # 7. Build response
     resp = BattleGenerateResponse(
         id=battle.id,
+        battle_type=battle_type,
         prompt_text=prompt.text,
         prompt_category=prompt.category,
         audio_a_url=f"/api/v1/audio/{tts_results[0]['filename']}",
@@ -192,10 +206,13 @@ async def create_battle(body: BattleCreate, db: AsyncSession = Depends(get_db)):
 async def list_battles(
     scenario_id: str | None = None,
     model_id: str | None = None,
+    battle_type: str | None = None,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Battle).order_by(Battle.created_at.desc()).limit(limit)
+    if battle_type:
+        stmt = stmt.where(Battle.battle_type == battle_type)
     if scenario_id:
         stmt = stmt.where(Battle.scenario_id == scenario_id)
     if model_id:
@@ -295,6 +312,8 @@ async def vote_battle(
 
     battle.winner = body.winner
     battle.vote_source = "human"
+    if body.sub_votes:
+        battle.sub_votes = body.sub_votes
 
     await db.commit()
     await db.refresh(battle)

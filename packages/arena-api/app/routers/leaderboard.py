@@ -12,10 +12,13 @@ router = APIRouter(prefix="/api/v1/leaderboard", tags=["leaderboard"])
 @router.get("")
 async def get_leaderboard(
     sort_by: str = "elo_rating",
+    battle_type: str = "tts",
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(VoiceModel).order_by(VoiceModel.elo_rating.desc())
+        select(VoiceModel)
+        .where(VoiceModel.model_type == battle_type)
+        .order_by(VoiceModel.elo_rating.desc())
     )
     models = result.scalars().all()
 
