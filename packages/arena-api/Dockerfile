@@ -9,10 +9,10 @@ ENV PYTHONPATH=/app
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir .
 
-# Install TTS provider SDKs (lazy-loaded, needed for battles)
-RUN pip install --no-cache-dir cartesia smallestai elevenlabs
+# Install TTS provider SDKs and audio generation tools
+RUN pip install --no-cache-dir cartesia smallestai elevenlabs edge-tts
 
 COPY . .
-RUN mkdir -p /app/uploads
+RUN mkdir -p /app/uploads/clips /app/uploads/prompts
 
-CMD alembic upgrade head && python scripts/seed.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+CMD alembic upgrade head && python scripts/seed.py && python scripts/generate_clips.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
