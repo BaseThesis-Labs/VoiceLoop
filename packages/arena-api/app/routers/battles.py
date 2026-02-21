@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import random
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -446,17 +447,29 @@ async def _generate_stt_battle(db: AsyncSession) -> STTBattleSetupResponse:
 
     clips_result = await db.execute(select(AudioClip))
     clips = clips_result.scalars().all()
-    curated_items = [
-        AudioClipItem(
+    curated_items = []
+    for c in clips:
+        if not c.audio_path:
+            continue
+        # Check file exists on disk
+        if not os.path.isfile(c.audio_path):
+            continue
+        # Build URL preserving subdirectory under uploads/
+        rel = c.audio_path
+        if rel.startswith("./"):
+            rel = rel[2:]
+        if rel.startswith("uploads/"):
+            rel = rel[len("uploads/"):]
+        curated_items.append(AudioClipItem(
             id=c.id,
             text=c.ground_truth,
             category=c.category,
             difficulty=c.difficulty,
-            audio_url=f"/api/v1/audio/{c.audio_path.split('/')[-1]}" if c.audio_path else "",
+            audio_url=f"/api/v1/audio/{rel}",
             duration_seconds=c.duration_seconds,
-        )
-        for c in clips
-    ] if clips else None
+        ))
+    if not curated_items:
+        curated_items = None
 
     return STTBattleSetupResponse(
         id=battle.id,
@@ -476,7 +489,6 @@ async def submit_stt_input_audio(
     """Step 2: Submit input audio for an STT battle, fan out to providers."""
     from app.services.stt_service import transcribe_with_provider
     from app.models.audio_clip import AudioClip
-    import os
     import uuid as _uuid
 
     result = await db.execute(select(Battle).where(Battle.id == battle_id))
@@ -504,7 +516,15 @@ async def submit_stt_input_audio(
         if not clip or not clip.audio_path:
             raise HTTPException(status_code=404, detail="Curated clip not found")
         input_path = clip.audio_path
-        input_filename = input_path.split("/")[-1]
+        if not os.path.isfile(input_path):
+            raise HTTPException(status_code=404, detail="Audio clip file not found on disk")
+        # Build relative path for audio URL (preserve subdirectory under uploads/)
+        rel = input_path
+        if rel.startswith("./"):
+            rel = rel[2:]
+        if rel.startswith("uploads/"):
+            rel = rel[len("uploads/"):]
+        input_filename = rel
         ground_truth = clip.ground_truth
     else:
         raise HTTPException(status_code=400, detail="Must provide either audio file or curated_clip_id")
@@ -544,8 +564,10 @@ async def submit_stt_input_audio(
         ok_models.append(model)
         ok_results.append(res)
 
+    if len(ok_models) < 1:
+        raise HTTPException(status_code=500, detail="All STT providers failed. Check API keys.")
     if len(ok_models) < 2:
-        raise HTTPException(status_code=500, detail="STT transcription failed for too many providers")
+        logger.warning("Only %d STT provider(s) succeeded out of %d", len(ok_models), len(models_ordered))
 
     evals = []
     for i, model in enumerate(ok_models):
@@ -560,12 +582,12 @@ async def submit_stt_input_audio(
         evals.append(ev)
     await db.flush()
 
-    battle.model_a_id = ok_models[0].id
-    battle.model_b_id = ok_models[1].id
+    battle.model_a_id = ok_models[0].id if len(ok_models) > 0 else None
+    battle.model_b_id = ok_models[1].id if len(ok_models) > 1 else None
     battle.model_c_id = ok_models[2].id if len(ok_models) > 2 else None
     battle.model_d_id = ok_models[3].id if len(ok_models) > 3 else None
-    battle.eval_a_id = evals[0].id
-    battle.eval_b_id = evals[1].id
+    battle.eval_a_id = evals[0].id if len(evals) > 0 else None
+    battle.eval_b_id = evals[1].id if len(evals) > 1 else None
     battle.eval_c_id = evals[2].id if len(evals) > 2 else None
     battle.eval_d_id = evals[3].id if len(evals) > 3 else None
 
