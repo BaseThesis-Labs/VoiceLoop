@@ -23,7 +23,7 @@ const MODES: ModeOption[] = [
     label: 'S2S',
     icon: '🔄',
     subtitle: 'Speak to models and compare their spoken responses',
-    enabled: false,
+    enabled: true,
   },
   {
     key: 'stt',

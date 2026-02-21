@@ -127,6 +127,58 @@ export interface GeneratedBattle {
   ttfb_d?: number | null;
 }
 
+// S2S types
+export interface CuratedPrompt {
+  id: string;
+  text: string;
+  category: string;
+  audio_url: string;
+  duration_seconds: number | null;
+}
+
+export interface S2SBattleSetup {
+  id: string;
+  battle_type: string;
+  model_count: number;
+  curated_prompts: CuratedPrompt[] | null;
+}
+
+export interface S2SBattleResult {
+  id: string;
+  battle_type: string;
+  input_audio_url: string;
+  input_transcript: string | null;
+  audio_a_url: string;
+  audio_b_url: string;
+  audio_c_url: string | null;
+  model_a_id: string;
+  model_b_id: string;
+  model_c_id: string | null;
+  e2e_latency_a: number;
+  e2e_latency_b: number;
+  e2e_latency_c: number | null;
+  ttfb_a: number;
+  ttfb_b: number;
+  ttfb_c: number | null;
+  duration_a: number;
+  duration_b: number;
+  duration_c: number | null;
+}
+
+export interface S2SModelMetrics {
+  transcript: string | null;
+  utmos: number | null;
+  prosody_score: number | null;
+  relevance_score: number | null;
+}
+
+export interface S2SMetrics {
+  status: string;
+  model_names: Record<string, string> | null;
+  providers: Record<string, string> | null;
+  metrics: Record<string, S2SModelMetrics> | null;
+}
+
 export interface TTSGenerateRequest {
   model_id: string;
   text: string;
@@ -204,6 +256,31 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ battle_type: battleType }),
       }),
+  },
+
+  s2s: {
+    setup: () =>
+      request<S2SBattleSetup>('/battles/generate', {
+        method: 'POST',
+        body: JSON.stringify({ battle_type: 's2s' }),
+      }),
+    submitAudio: async (
+      battleId: string,
+      audio: Blob | null,
+      curatedPromptId?: string,
+    ): Promise<S2SBattleResult> => {
+      const form = new FormData();
+      if (audio) form.append('audio', audio, 'recording.webm');
+      if (curatedPromptId) form.append('curated_prompt_id', curatedPromptId);
+      const res = await fetch(`${API_BASE}/battles/${battleId}/input-audio`, {
+        method: 'POST',
+        body: form,
+      });
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      return res.json() as Promise<S2SBattleResult>;
+    },
+    getMetrics: (battleId: string) =>
+      request<S2SMetrics>(`/battles/${battleId}/metrics`),
   },
 
   tts: {

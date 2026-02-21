@@ -1,99 +1,145 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Shuffle,
-  HelpCircle,
   Share2,
   ArrowRight,
   Zap,
+  HelpCircle,
   Loader2,
   AlertCircle,
 } from 'lucide-react'
 import AudioPlayerCard from '../components/AudioPlayerCard'
 import VoteButton from '../components/VoteButton'
-import { api, type GeneratedBattle } from '../api/client'
-import { ModeSelector, getStoredMode, type BattleMode } from '../components/ModeSelector'
-import S2SBattlePage from './S2SBattlePage'
+import GatedLoadingState from '../components/GatedLoadingState'
+import DimensionVoter from '../components/DimensionVoter'
+import S2SInputPanel, { type CuratedPrompt } from '../components/S2SInputPanel'
+import { ModeSelector, type BattleMode } from '../components/ModeSelector'
+import {
+  api,
+  type S2SBattleSetup,
+  type S2SBattleResult,
+  type S2SMetrics,
+} from '../api/client'
 
 // ---- Types ----
-type ModelLabel = 'a' | 'b' | 'c' | 'd'
+type ModelLabel = 'a' | 'b' | 'c'
 type VoteChoice = ModelLabel | 'all_bad' | null
 type PlayingState = ModelLabel | null
+type S2SState = 'idle' | 'recording' | 'processing' | 'playing' | 'voting' | 'revealed'
 
 // ---- Constants ----
 const COLORS: Record<ModelLabel, string> = {
-  a: '#6366f1', // indigo
-  b: '#f59e0b', // amber
-  c: '#10b981', // emerald
-  d: '#ec4899', // pink
+  a: '#6366f1',
+  b: '#f59e0b',
+  c: '#10b981',
 }
 
 const LABEL_NAMES: Record<ModelLabel, string> = {
   a: 'Model A',
   b: 'Model B',
   c: 'Model C',
-  d: 'Model D',
 }
 
 // ---- Component ----
-export default function BattlePage() {
-  const [playing, setPlaying] = useState<PlayingState>(null)
-  const [voted, setVoted] = useState<VoteChoice>(null)
-  const [revealed, setRevealed] = useState(false)
-  const [hasPlayed, setHasPlayed] = useState<Record<ModelLabel, boolean>>({
-    a: false, b: false, c: false, d: false,
-  })
-
-  // API state
-  const [battle, setBattle] = useState<GeneratedBattle | null>(null)
-  const [loading, setLoading] = useState(true)
+export default function S2SBattlePage({
+  onModeChange,
+  battleCount: externalBattleCount,
+}: {
+  onModeChange: (mode: BattleMode) => void
+  battleCount: number
+}) {
+  const [state, setState] = useState<S2SState>('idle')
+  const [setup, setSetup] = useState<S2SBattleSetup | null>(null)
+  const [result, setResult] = useState<S2SBattleResult | null>(null)
+  const [metrics, setMetrics] = useState<S2SMetrics | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [battleCount, setBattleCount] = useState(0)
-  const [voting, setVoting] = useState(false)
-  const [battleMode, setBattleMode] = useState<BattleMode>(getStoredMode)
+  const [loading, setLoading] = useState(true)
+  const [battleCount, setBattleCount] = useState(externalBattleCount)
 
-  // Audio refs + progress
+  // Playback state
+  const [playing, setPlaying] = useState<PlayingState>(null)
+  const [hasPlayed, setHasPlayed] = useState<Record<ModelLabel, boolean>>({ a: false, b: false, c: false })
+  const [progress, setProgress] = useState<Record<ModelLabel, number>>({ a: 0, b: 0, c: 0 })
+  const [voted, setVoted] = useState<VoteChoice>(null)
+  const [voting, setVoting] = useState(false)
+  const [subVotes, setSubVotes] = useState<Record<string, string>>({})
+
+  // Processing timer
+  const [processingElapsed, setProcessingElapsed] = useState(0)
+  const processingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Audio refs
   const audioRefs = {
     a: useRef<HTMLAudioElement>(null),
     b: useRef<HTMLAudioElement>(null),
     c: useRef<HTMLAudioElement>(null),
-    d: useRef<HTMLAudioElement>(null),
   }
-  const [progress, setProgress] = useState<Record<ModelLabel, number>>({
-    a: 0, b: 0, c: 0, d: 0,
-  })
+  const inputAudioRef = useRef<HTMLAudioElement>(null)
 
-  // Which models are present in this battle
-  const activeModels: ModelLabel[] = battle
-    ? (['a', 'b'] as ModelLabel[])
-        .concat(battle.audio_c_url ? ['c'] : [])
-        .concat(battle.audio_d_url ? ['d'] : [])
+  // Metrics polling
+  const metricsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const activeModels: ModelLabel[] = result
+    ? (['a', 'b'] as ModelLabel[]).concat(result.audio_c_url ? ['c'] : [])
     : []
 
-  const allPlayed = activeModels.every((m) => hasPlayed[m])
+  const allPlayed = activeModels.length > 0 && activeModels.every((m) => hasPlayed[m])
 
-  const loadBattle = useCallback(async () => {
+  // ---------- Setup battle (step 1) ----------
+  const initBattle = useCallback(async () => {
     setLoading(true)
     setError(null)
-    setBattle(null)
+    setSetup(null)
+    setResult(null)
+    setMetrics(null)
+    setState('idle')
     try {
-      const result = await api.battles.generate(battleMode)
-      setBattle(result)
+      const s = await api.s2s.setup()
+      setSetup(s)
       setBattleCount((c) => c + 1)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to generate battle')
+      setError(e instanceof Error ? e.message : 'Failed to set up S2S battle')
     } finally {
       setLoading(false)
     }
-  }, [battleMode])
+  }, [])
 
   useEffect(() => {
-    loadBattle()
-  }, [loadBattle])
+    initBattle()
+  }, [initBattle])
 
-  // Audio event handlers
+  // ---------- Submit audio (step 2) ----------
+  async function handleSubmitAudio(audio: Blob | null, curatedPromptId: string | null) {
+    if (!setup) return
+    setState('processing')
+    setProcessingElapsed(0)
+
+    processingTimerRef.current = setInterval(() => {
+      setProcessingElapsed((e) => e + 100)
+    }, 100)
+
+    try {
+      const res = await api.s2s.submitAudio(
+        setup.id,
+        audio,
+        curatedPromptId ?? undefined,
+      )
+      setResult(res)
+      setState('playing')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to process audio')
+      setState('idle')
+    } finally {
+      if (processingTimerRef.current) {
+        clearInterval(processingTimerRef.current)
+        processingTimerRef.current = null
+      }
+    }
+  }
+
+  // ---------- Audio event handlers ----------
   useEffect(() => {
-    const labels: ModelLabel[] = ['a', 'b', 'c', 'd']
+    const labels: ModelLabel[] = ['a', 'b', 'c']
     const cleanups: (() => void)[] = []
 
     for (const label of labels) {
@@ -119,16 +165,15 @@ export default function BattlePage() {
     }
 
     return () => cleanups.forEach((fn) => fn())
-  }, [battle])
+  }, [result])
 
   function handlePlay(model: ModelLabel) {
-    const allAudios = (['a', 'b', 'c', 'd'] as ModelLabel[]).map((l) => audioRefs[l].current)
+    const allAudios = (['a', 'b', 'c'] as ModelLabel[]).map((l) => audioRefs[l].current)
 
     if (playing === model) {
       audioRefs[model].current?.pause()
       setPlaying(null)
     } else {
-      // Pause all others
       allAudios.forEach((a) => a?.pause())
       audioRefs[model].current?.play()
       setHasPlayed((p) => ({ ...p, [model]: true }))
@@ -136,79 +181,94 @@ export default function BattlePage() {
     }
   }
 
+  // ---------- Voting ----------
   async function handleVote(choice: VoteChoice) {
-    if (!battle || !choice) return
+    if (!setup || !choice) return
 
     setVoting(true)
     try {
-      if (choice === 'all_bad') {
-        await api.battles.vote(battle.id, 'all_bad')
-      } else {
-        await api.battles.vote(battle.id, choice)
-      }
+      const allSubVotes = Object.keys(subVotes).length > 0 ? subVotes : undefined
+      await api.battles.vote(setup.id, choice as 'a' | 'b' | 'c' | 'tie' | 'all_bad', allSubVotes)
     } catch {
       // Vote failed silently — still reveal
     }
     setVoted(choice)
-    setRevealed(true)
+    setState('revealed')
     setVoting(false)
 
-    // Stop all audio on vote
-    for (const label of ['a', 'b', 'c', 'd'] as ModelLabel[]) {
+    // Stop all audio
+    for (const label of ['a', 'b', 'c'] as ModelLabel[]) {
       audioRefs[label].current?.pause()
     }
     setPlaying(null)
+
+    // Start metrics polling
+    startMetricsPolling()
   }
 
+  function startMetricsPolling() {
+    if (!setup) return
+    const battleId = setup.id
+
+    metricsIntervalRef.current = setInterval(async () => {
+      try {
+        const m = await api.s2s.getMetrics(battleId)
+        setMetrics(m)
+        if (m.status === 'complete') {
+          if (metricsIntervalRef.current) {
+            clearInterval(metricsIntervalRef.current)
+            metricsIntervalRef.current = null
+          }
+        }
+      } catch {
+        // Silently continue polling
+      }
+    }, 1000)
+  }
+
+  // Cleanup timers
+  useEffect(() => {
+    return () => {
+      if (processingTimerRef.current) clearInterval(processingTimerRef.current)
+      if (metricsIntervalRef.current) clearInterval(metricsIntervalRef.current)
+    }
+  }, [])
+
+  // ---------- Next battle ----------
   function handleNextBattle() {
     setPlaying(null)
     setVoted(null)
-    setRevealed(false)
-    setHasPlayed({ a: false, b: false, c: false, d: false })
-    setProgress({ a: 0, b: 0, c: 0, d: 0 })
+    setSubVotes({})
+    setHasPlayed({ a: false, b: false, c: false })
+    setProgress({ a: 0, b: 0, c: 0 })
+    if (metricsIntervalRef.current) {
+      clearInterval(metricsIntervalRef.current)
+      metricsIntervalRef.current = null
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' })
-    loadBattle()
+    initBattle()
   }
-
-  function handleModeChange(mode: BattleMode) {
-    setBattleMode(mode)
-  }
-
-  useEffect(() => {
-    // Reset state when mode changes
-    setPlaying(null)
-    setVoted(null)
-    setRevealed(false)
-    setHasPlayed({ a: false, b: false, c: false, d: false })
-    setProgress({ a: 0, b: 0, c: 0, d: 0 })
-  }, [battleMode])
 
   function getModelInfo(label: ModelLabel) {
-    if (!battle) return { name: '', provider: '', duration: 0, ttfb: 0 }
-    const map: Record<ModelLabel, { name: string; provider: string; duration: number; ttfb: number }> = {
-      a: { name: battle.model_a_name, provider: battle.provider_a, duration: battle.duration_a, ttfb: battle.ttfb_a },
-      b: { name: battle.model_b_name, provider: battle.provider_b, duration: battle.duration_b, ttfb: battle.ttfb_b },
-      c: { name: battle.model_c_name ?? '', provider: battle.provider_c ?? '', duration: battle.duration_c ?? 0, ttfb: battle.ttfb_c ?? 0 },
-      d: { name: battle.model_d_name ?? '', provider: battle.provider_d ?? '', duration: battle.duration_d ?? 0, ttfb: battle.ttfb_d ?? 0 },
+    if (!result) return { e2eLatency: 0, duration: 0, ttfb: 0 }
+    const map: Record<ModelLabel, { e2eLatency: number; duration: number; ttfb: number }> = {
+      a: { e2eLatency: result.e2e_latency_a, duration: result.duration_a, ttfb: result.ttfb_a },
+      b: { e2eLatency: result.e2e_latency_b, duration: result.duration_b, ttfb: result.ttfb_b },
+      c: { e2eLatency: result.e2e_latency_c ?? 0, duration: result.duration_c ?? 0, ttfb: result.ttfb_c ?? 0 },
     }
     return map[label]
-  }
-
-  // Route to S2S battle page when in S2S mode
-  if (battleMode === 's2s') {
-    return <S2SBattlePage onModeChange={handleModeChange} battleCount={battleCount} />
   }
 
   return (
     <div className="min-h-screen bg-bg-primary pb-24">
       <div className="max-w-5xl mx-auto px-6 pt-10">
         {/* Hidden audio elements */}
-        {battle && (
+        {result && (
           <>
-            <audio ref={audioRefs.a} src={battle.audio_a_url} preload="auto" />
-            <audio ref={audioRefs.b} src={battle.audio_b_url} preload="auto" />
-            {battle.audio_c_url && <audio ref={audioRefs.c} src={battle.audio_c_url} preload="auto" />}
-            {battle.audio_d_url && <audio ref={audioRefs.d} src={battle.audio_d_url} preload="auto" />}
+            <audio ref={audioRefs.a} src={result.audio_a_url} preload="auto" />
+            <audio ref={audioRefs.b} src={result.audio_b_url} preload="auto" />
+            {result.audio_c_url && <audio ref={audioRefs.c} src={result.audio_c_url} preload="auto" />}
+            {result.input_audio_url && <audio ref={inputAudioRef} src={result.input_audio_url} preload="auto" />}
           </>
         )}
 
@@ -218,7 +278,7 @@ export default function BattlePage() {
             <div className="flex items-center gap-2">
               <Zap size={14} className="text-accent" />
               <span className="font-[family-name:var(--font-mono)] text-sm text-text-body">
-                Battle <span className="text-text-primary">#{battleCount}</span>
+                S2S Battle <span className="text-text-primary">#{battleCount}</span>
               </span>
             </div>
             <button className="flex items-center gap-1.5 text-xs text-text-body hover:text-text-primary transition-colors group">
@@ -226,7 +286,7 @@ export default function BattlePage() {
               How it works
             </button>
           </div>
-          <ModeSelector active={battleMode} onChange={handleModeChange} />
+          <ModeSelector active="s2s" onChange={onModeChange} />
         </div>
 
         {/* Loading State */}
@@ -238,16 +298,13 @@ export default function BattlePage() {
           >
             <Loader2 size={32} className="text-accent animate-spin mb-4" />
             <p className="text-text-body text-sm font-[family-name:var(--font-mono)]">
-              Generating battle audio...
-            </p>
-            <p className="text-text-faint text-xs font-[family-name:var(--font-mono)] mt-1">
-              This takes 3-8 seconds for 4 models
+              Setting up S2S battle...
             </p>
           </motion.div>
         )}
 
         {/* Error State */}
-        {error && !loading && (
+        {error && state !== 'processing' && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -258,7 +315,7 @@ export default function BattlePage() {
             <motion.button
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
-              onClick={loadBattle}
+              onClick={initBattle}
               className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg bg-accent/10 text-accent border border-accent/20 hover:bg-accent/15 transition-colors"
             >
               Retry
@@ -266,37 +323,41 @@ export default function BattlePage() {
           </motion.div>
         )}
 
-        {/* Battle Content */}
-        {battle && !loading && !error && (
-          <>
-            {/* Prompt Card */}
-            <div className="bg-bg-surface rounded-xl border border-border-default p-6 mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.2em] text-text-faint">
-                  Prompt
-                </span>
-                <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.15em] text-text-faint px-2 py-0.5 rounded bg-bg-hover border border-border-default">
-                  {battle.prompt_category}
-                </span>
-              </div>
-              <p className="text-text-primary text-[15px] leading-relaxed mb-4">
-                {battle.prompt_text}
-              </p>
-              <div className="flex justify-end">
-                <motion.button
-                  whileHover={{ scale: 1.04 }}
-                  whileTap={{ scale: 0.96 }}
-                  onClick={handleNextBattle}
-                  className="flex items-center gap-2 text-xs text-text-body hover:text-text-primary transition-colors px-3 py-1.5 rounded-lg border border-border-default hover:border-border-strong bg-bg-hover/50"
-                >
-                  <Shuffle size={13} />
-                  New Prompt
-                </motion.button>
-              </div>
-            </div>
+        {/* Idle: Input panel */}
+        {state === 'idle' && setup && !loading && !error && (
+          <S2SInputPanel
+            curatedPrompts={setup.curated_prompts ?? []}
+            onSubmitAudio={handleSubmitAudio}
+          />
+        )}
 
-            {/* 4-Model Audio Grid (2x2) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        {/* Processing: Gated loading */}
+        {state === 'processing' && setup && (
+          <GatedLoadingState
+            modelCount={setup.model_count}
+            elapsedMs={processingElapsed}
+          />
+        )}
+
+        {/* Playing + Voting + Revealed */}
+        {(state === 'playing' || state === 'voting' || state === 'revealed') && result && (
+          <>
+            {/* Input audio replay card */}
+            {result.input_transcript && (
+              <div className="bg-bg-surface rounded-xl border border-border-default p-4 mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.2em] text-text-faint">
+                    Your Input
+                  </span>
+                </div>
+                <p className="text-text-primary text-sm leading-relaxed">
+                  {result.input_transcript}
+                </p>
+              </div>
+            )}
+
+            {/* Model Audio Grid */}
+            <div className={`grid grid-cols-1 ${activeModels.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 mb-6`}>
               {activeModels.map((label) => (
                 <AudioPlayerCard
                   key={label}
@@ -308,15 +369,15 @@ export default function BattlePage() {
                   duration={`${getModelInfo(label).duration.toFixed(1)}s`}
                   ttfb={`${Math.round(getModelInfo(label).ttfb)}ms`}
                   progress={progress[label]}
-                  revealed={revealed}
-                  provider={revealed ? getModelInfo(label).provider : undefined}
+                  revealed={state === 'revealed'}
+                  provider={state === 'revealed' && metrics?.providers ? metrics.providers[label] : undefined}
                 />
               ))}
             </div>
 
             {/* Vote Panel */}
             <AnimatePresence mode="wait">
-              {!revealed ? (
+              {state !== 'revealed' ? (
                 <motion.div
                   key="vote-panel"
                   initial={{ opacity: 0, y: 12 }}
@@ -326,7 +387,7 @@ export default function BattlePage() {
                   className="bg-bg-surface rounded-xl border border-border-default p-6 mb-4"
                 >
                   <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.2em] text-text-faint text-center mb-5">
-                    {voting ? 'Submitting vote...' : 'Which voice sounds best?'}
+                    {voting ? 'Submitting vote...' : 'Which response sounds best?'}
                   </p>
                   <div className="flex flex-wrap justify-center gap-3">
                     {activeModels.map((label) => (
@@ -347,6 +408,13 @@ export default function BattlePage() {
                       onClick={() => handleVote('all_bad')}
                     />
                   </div>
+
+                  {/* Dimension voter */}
+                  <DimensionVoter
+                    models={activeModels}
+                    onSubVotesChange={setSubVotes}
+                  />
+
                   {!allPlayed && (
                     <p className="text-center text-text-faint text-xs mt-4 font-[family-name:var(--font-mono)]">
                       Listen to all {activeModels.length} models before voting
@@ -358,7 +426,7 @@ export default function BattlePage() {
 
             {/* Post-Vote Reveal */}
             <AnimatePresence>
-              {revealed && (
+              {state === 'revealed' && (
                 <motion.div
                   key="reveal"
                   initial={{ opacity: 0, y: 24 }}
@@ -375,10 +443,12 @@ export default function BattlePage() {
                         Models Revealed
                       </p>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      {/* Model cards */}
+                      <div className={`grid grid-cols-1 ${activeModels.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 mb-6`}>
                         {activeModels.map((label, idx) => {
-                          const info = getModelInfo(label)
                           const isWinner = voted === label
+                          const modelName = metrics?.model_names?.[label] ?? '...'
+                          const provider = metrics?.providers?.[label] ?? '...'
                           return (
                             <motion.div
                               key={label}
@@ -404,10 +474,10 @@ export default function BattlePage() {
                                 </p>
                                 <div className="flex items-center gap-2">
                                   <p className="text-text-primary font-medium text-sm truncate">
-                                    {info.name}
+                                    {modelName}
                                   </p>
                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-[family-name:var(--font-mono)] uppercase tracking-wider bg-accent/10 text-accent shrink-0">
-                                    {info.provider}
+                                    {provider}
                                   </span>
                                 </div>
                               </div>
@@ -433,7 +503,7 @@ export default function BattlePage() {
                         </span>
                       </div>
 
-                      {/* Metrics Comparison */}
+                      {/* Metrics table */}
                       <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -468,11 +538,32 @@ export default function BattlePage() {
                               </thead>
                               <tbody>
                                 {(() => {
+                                  const e2es = activeModels.map((l) => getModelInfo(l).e2eLatency)
+                                  const minE2e = Math.min(...e2es)
                                   const ttfbs = activeModels.map((l) => getModelInfo(l).ttfb)
                                   const minTtfb = Math.min(...ttfbs)
                                   return (
                                     <>
                                       <tr className="bg-bg-surface">
+                                        <td className="px-4 py-2.5 text-text-body font-[family-name:var(--font-mono)] text-xs">
+                                          E2E Latency
+                                        </td>
+                                        {activeModels.map((label) => {
+                                          const e2e = getModelInfo(label).e2eLatency
+                                          const isBest = e2e === minE2e
+                                          return (
+                                            <td
+                                              key={label}
+                                              className={`px-4 py-2.5 text-right font-[family-name:var(--font-mono)] text-xs ${
+                                                isBest ? 'text-accent font-semibold' : 'text-text-body'
+                                              }`}
+                                            >
+                                              {Math.round(e2e)}ms
+                                            </td>
+                                          )
+                                        })}
+                                      </tr>
+                                      <tr className="bg-bg-hover/50">
                                         <td className="px-4 py-2.5 text-text-body font-[family-name:var(--font-mono)] text-xs">
                                           TTFB
                                         </td>
@@ -491,7 +582,7 @@ export default function BattlePage() {
                                           )
                                         })}
                                       </tr>
-                                      <tr className="bg-bg-hover/50">
+                                      <tr className="bg-bg-surface">
                                         <td className="px-4 py-2.5 text-text-body font-[family-name:var(--font-mono)] text-xs">
                                           Duration
                                         </td>
@@ -511,6 +602,16 @@ export default function BattlePage() {
                             </table>
                           </div>
                         </div>
+
+                        {/* Progressive metrics status */}
+                        {metrics && metrics.status !== 'complete' && (
+                          <div className="flex items-center justify-center gap-2 mt-3">
+                            <Loader2 size={12} className="text-accent animate-spin" />
+                            <span className="text-[11px] text-text-faint font-[family-name:var(--font-mono)]">
+                              Computing detailed metrics...
+                            </span>
+                          </div>
+                        )}
                       </motion.div>
 
                       {/* Action Buttons */}
@@ -545,4 +646,3 @@ export default function BattlePage() {
     </div>
   )
 }
-
