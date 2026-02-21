@@ -16,8 +16,8 @@ class BattleVote(BaseModel):
 class BattleResponse(BaseModel):
     id: str
     scenario_id: str
-    model_a_id: str
-    model_b_id: str
+    model_a_id: str | None = None
+    model_b_id: str | None = None
     model_c_id: str | None = None
     model_d_id: str | None = None
     eval_a_id: str | None

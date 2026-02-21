@@ -2,7 +2,7 @@
 import asyncio
 from sqlalchemy import select
 from app.database import engine, async_session
-from app.models import Base, VoiceModel, Scenario, Prompt, AudioClip
+from app.models import Base, VoiceModel, Scenario, Prompt, AudioClip, AgentConfiguration
 
 
 # Cartesia Sonic-3 voices — diverse set for voice agent arena battles
@@ -749,6 +749,204 @@ STT_CLIPS = [
     },
 ]
 
+AGENT_CONFIGS = [
+    {
+        "id": "agent-vapi-default",
+        "name": "Vapi + GPT-4o-mini + ElevenLabs",
+        "architecture_type": "cascade",
+        "provider": "vapi",
+        "components_json": {"stt": "deepgram_nova3", "llm": "gpt-4o-mini", "tts": "elevenlabs"},
+        "config_json": {
+            "llm_provider": "openai",
+            "llm_model": "gpt-4o-mini",
+            "tts_provider": "11labs",
+            "tts_voice_id": "",
+            "stt_provider": "deepgram",
+            "stt_model": "nova-2",
+            "first_message": "Hello! How can I help you today?",
+        },
+    },
+    {
+        "id": "agent-vapi-quality",
+        "name": "Vapi + GPT-4o + ElevenLabs",
+        "architecture_type": "cascade",
+        "provider": "vapi",
+        "components_json": {"stt": "deepgram_nova3", "llm": "gpt-4o", "tts": "elevenlabs"},
+        "config_json": {
+            "llm_provider": "openai",
+            "llm_model": "gpt-4o",
+            "tts_provider": "11labs",
+            "tts_voice_id": "",
+            "stt_provider": "deepgram",
+            "stt_model": "nova-2",
+            "first_message": "Hello! How can I help you today?",
+        },
+    },
+    {
+        "id": "agent-vapi-claude",
+        "name": "Vapi + Claude Sonnet 4.5 + ElevenLabs",
+        "architecture_type": "cascade",
+        "provider": "vapi",
+        "components_json": {"stt": "deepgram_nova3", "llm": "claude-sonnet-4-5", "tts": "elevenlabs"},
+        "config_json": {
+            "llm_provider": "anthropic",
+            "llm_model": "claude-sonnet-4-5-20250929",
+            "tts_provider": "11labs",
+            "tts_voice_id": "",
+            "stt_provider": "deepgram",
+            "stt_model": "nova-2",
+            "first_message": "Hello! How can I help you today?",
+        },
+    },
+    {
+        "id": "agent-retell-default",
+        "name": "Retell + GPT-4o-mini + ElevenLabs",
+        "architecture_type": "cascade",
+        "provider": "retell",
+        "components_json": {"stt": "deepgram_nova3", "llm": "gpt-4o-mini", "tts": "elevenlabs"},
+        "config_json": {"agent_id": ""},
+    },
+    {
+        "id": "agent-retell-quality",
+        "name": "Retell + GPT-4o + ElevenLabs",
+        "architecture_type": "cascade",
+        "provider": "retell",
+        "components_json": {"stt": "deepgram_nova3", "llm": "gpt-4o", "tts": "elevenlabs"},
+        "config_json": {"agent_id": ""},
+    },
+    {
+        "id": "agent-retell-claude",
+        "name": "Retell + Claude Sonnet 4.5 + ElevenLabs",
+        "architecture_type": "cascade",
+        "provider": "retell",
+        "components_json": {"stt": "deepgram_nova3", "llm": "claude-sonnet-4-5", "tts": "elevenlabs"},
+        "config_json": {"agent_id": ""},
+    },
+]
+
+AGENT_SCENARIOS = [
+    {
+        "name": "Haircut appointment booking",
+        "category": "booking",
+        "difficulty": "easy",
+        "description": "Book a haircut appointment for tomorrow at 2pm at your usual salon.",
+        "system_prompt": "You are a receptionist at StyleCut Salon. Help customers book haircut appointments. Available times tomorrow: 10am, 11am, 2pm, 3:30pm, 5pm. Ask for their name, preferred stylist (optional), and confirm the time. Stylists available: Maria, James, Priya.",
+        "required_slots": {"service": "haircut", "date": "tomorrow", "time": "2pm"},
+        "success_criteria": "Agent confirms a haircut appointment for tomorrow at 2pm with customer name.",
+        "tools_available": [{"name": "check_availability", "description": "Check available time slots"}, {"name": "book_appointment", "description": "Book an appointment"}],
+        "max_turns": 8,
+        "max_duration_seconds": 60,
+    },
+    {
+        "name": "Restaurant with dietary needs",
+        "category": "booking",
+        "difficulty": "medium",
+        "description": "Book a table for 4 at an Italian restaurant downtown this Friday at 7pm. You have a severe nut allergy.",
+        "system_prompt": "You are a restaurant booking assistant for BookTable. Help customers find and book restaurants. Downtown Italian restaurants: Bella Vita (nut-free kitchen available), Trattoria Roma (cannot guarantee nut-free), Il Giardino (fully nut-free menu). Ask for party size, date, time, and any dietary needs. Confirm all details before booking.",
+        "required_slots": {"party_size": "4", "cuisine": "Italian", "location": "downtown", "date": "Friday", "time": "7pm", "dietary": "nut allergy"},
+        "success_criteria": "Agent books at a restaurant that accommodates nut allergies, for 4 people, on Friday around 7pm, and confirms the booking.",
+        "tools_available": [{"name": "search_restaurants", "description": "Search for restaurants"}, {"name": "check_availability", "description": "Check table availability"}, {"name": "make_reservation", "description": "Make a reservation"}],
+        "max_turns": 10,
+        "max_duration_seconds": 90,
+    },
+    {
+        "name": "Hotel reservation with preferences",
+        "category": "booking",
+        "difficulty": "medium",
+        "description": "Book a hotel room downtown for 2 nights starting this Saturday. You want a king bed and late checkout.",
+        "system_prompt": "You are a hotel booking assistant for StayEasy. Downtown hotels: Grand Plaza ($189/night, king available, late checkout $30 extra), City Inn ($129/night, king available, no late checkout), Luxury Suites ($299/night, king standard, complimentary late checkout). Help the customer find the right hotel and book.",
+        "required_slots": {"check_in": "Saturday", "nights": "2", "bed_type": "king", "late_checkout": "yes"},
+        "success_criteria": "Agent books a hotel with king bed for 2 nights starting Saturday, addresses late checkout preference.",
+        "tools_available": [{"name": "search_hotels", "description": "Search for hotels"}, {"name": "book_room", "description": "Book a hotel room"}],
+        "max_turns": 10,
+        "max_duration_seconds": 90,
+    },
+    {
+        "name": "Flight rebooking",
+        "category": "booking",
+        "difficulty": "hard",
+        "description": "Your flight tomorrow at 8am was cancelled. You need to rebook for the same destination (Chicago). You prefer a direct flight and window seat, departing before noon.",
+        "system_prompt": "You are an airline rebooking agent for SkyWay Airlines. The customer's flight SW201 (8am to Chicago) was cancelled due to weather. Available flights tomorrow to Chicago: SW305 (10:30am, direct, window available, $0 change fee), SW412 (11:45am, 1 stop in Denver, window available, $0 change fee), SW518 (2pm, direct, aisle only, $0 change fee). Help rebook and confirm all details including seat preference.",
+        "required_slots": {"destination": "Chicago", "departure": "before noon", "seat": "window", "flight_type": "direct"},
+        "success_criteria": "Agent rebooks on a suitable flight before noon with window seat, ideally direct.",
+        "tools_available": [{"name": "search_flights", "description": "Search available flights"}, {"name": "rebook_flight", "description": "Rebook the customer's flight"}],
+        "max_turns": 12,
+        "max_duration_seconds": 120,
+    },
+    {
+        "name": "Order status check",
+        "category": "support",
+        "difficulty": "easy",
+        "description": "Check the status of your recent order #78432. You ordered it 3 days ago.",
+        "system_prompt": "You are a customer support agent for ShopFast. Order #78432: placed 3 days ago, 2 items (wireless headphones, phone case), shipped yesterday via FedEx, tracking #FX9876543, estimated delivery in 2 days. Provide order status clearly and offer the tracking number.",
+        "required_slots": {"order_number": "78432"},
+        "success_criteria": "Agent provides order status, shipping info, and tracking number.",
+        "tools_available": [{"name": "lookup_order", "description": "Look up order by number"}],
+        "max_turns": 6,
+        "max_duration_seconds": 45,
+    },
+    {
+        "name": "Return with missing receipt",
+        "category": "support",
+        "difficulty": "medium",
+        "description": "You want to return a jacket you bought 2 weeks ago but lost the receipt. You paid with a credit card.",
+        "system_prompt": "You are a returns specialist for FashionMart. Policy: returns within 30 days with receipt for full refund. Without receipt: can look up by credit card (last 4 digits + approximate date), then issue store credit. Ask for item description, approximate purchase date, and last 4 digits of card. If found, process the return for store credit.",
+        "required_slots": {"item": "jacket", "purchase_date": "2 weeks ago", "card_last4": "any"},
+        "success_criteria": "Agent looks up the purchase by card, finds it, and processes return for store credit.",
+        "tools_available": [{"name": "lookup_purchase", "description": "Look up purchase by card"}, {"name": "process_return", "description": "Process a return"}],
+        "max_turns": 10,
+        "max_duration_seconds": 90,
+    },
+    {
+        "name": "Billing dispute - double charge",
+        "category": "support",
+        "difficulty": "hard",
+        "description": "You were charged twice for your monthly subscription ($49.99 each). You're frustrated and want a refund for the duplicate charge.",
+        "system_prompt": "You are a billing support agent for CloudServe. The customer's account shows two charges of $49.99 on the same day — this was a known billing system glitch affecting some customers. Policy: acknowledge the error, apologize sincerely, process immediate refund for the duplicate charge, and offer a $10 credit for the inconvenience. Be empathetic but professional. Do not be defensive.",
+        "required_slots": {"issue": "double charge", "amount": "49.99"},
+        "success_criteria": "Agent acknowledges the duplicate charge, apologizes, processes refund, and offers the $10 courtesy credit.",
+        "tools_available": [{"name": "check_billing", "description": "Check billing history"}, {"name": "process_refund", "description": "Process a refund"}, {"name": "apply_credit", "description": "Apply account credit"}],
+        "max_turns": 10,
+        "max_duration_seconds": 90,
+    },
+    {
+        "name": "Store hours and directions",
+        "category": "info_retrieval",
+        "difficulty": "easy",
+        "description": "Ask about the store's Sunday hours and how to get there from downtown.",
+        "system_prompt": "You are a store information assistant for MegaMart on Oak Street. Hours: Mon-Sat 8am-9pm, Sunday 10am-6pm. Location: 456 Oak Street, 2 miles north of downtown. From downtown: take Main Street north, turn right on Oak, store is on the left. Parking: free lot with 200 spaces. Nearest bus stop: Route 7, Oak & Elm stop.",
+        "required_slots": {"info_type": "hours"},
+        "success_criteria": "Agent provides Sunday hours and directions from downtown.",
+        "tools_available": [],
+        "max_turns": 6,
+        "max_duration_seconds": 45,
+    },
+    {
+        "name": "Product comparison",
+        "category": "info_retrieval",
+        "difficulty": "medium",
+        "description": "Compare the Basic and Premium subscription plans. You want to know the main differences, especially regarding storage and support.",
+        "system_prompt": "You are a sales assistant for DataVault. Plans: Basic ($9.99/mo, 100GB storage, email support, 5 user seats, standard encryption) vs Premium ($24.99/mo, 1TB storage, priority phone+email support, unlimited seats, advanced encryption, API access, custom integrations). Annual billing saves 20%. Help the customer understand which plan fits their needs.",
+        "required_slots": {},
+        "success_criteria": "Agent clearly explains storage and support differences between Basic and Premium plans.",
+        "tools_available": [],
+        "max_turns": 8,
+        "max_duration_seconds": 60,
+    },
+    {
+        "name": "Router troubleshooting guide",
+        "category": "info_retrieval",
+        "difficulty": "hard",
+        "description": "Your internet is not working. You need help troubleshooting your router step by step.",
+        "system_prompt": "You are a technical support agent for NetConnect ISP. Troubleshooting steps: 1) Check if router lights are on (power, internet, WiFi). 2) If power light is off, check power cable connection. 3) If internet light is off/red, unplug router for 30 seconds then plug back in. 4) Wait 2 minutes for lights to stabilize. 5) If still no internet light, check coaxial/ethernet cable from wall. 6) Try connecting directly via ethernet cable to rule out WiFi issues. 7) If still not working, there may be an outage — check status page or schedule technician visit. Walk through each step, wait for the customer to report results before moving to the next step.",
+        "required_slots": {},
+        "success_criteria": "Agent walks through troubleshooting steps sequentially, waiting for customer feedback at each step.",
+        "tools_available": [{"name": "check_outage", "description": "Check for service outages in the area"}],
+        "max_turns": 15,
+        "max_duration_seconds": 120,
+    },
+]
+
 
 async def seed():
     async with engine.begin() as conn:
@@ -792,6 +990,32 @@ async def seed():
                 db.add(AudioClip(**c))
                 clips_added += 1
 
+        # --- Agent Configurations ---
+        configs_added = 0
+        for ac in AGENT_CONFIGS:
+            existing = await db.get(AgentConfiguration, ac["id"])
+            if not existing:
+                db.add(AgentConfiguration(**ac))
+                configs_added += 1
+
+        # --- Agent Scenarios (update existing + add new) ---
+        agent_scenarios_added = 0
+        for sc in AGENT_SCENARIOS:
+            result = await db.execute(
+                select(Scenario).where(Scenario.name == sc["name"])
+            )
+            existing = result.scalar_one_or_none()
+            if existing:
+                existing.system_prompt = sc.get("system_prompt")
+                existing.required_slots = sc.get("required_slots")
+                existing.success_criteria = sc.get("success_criteria")
+                existing.tools_available = sc.get("tools_available")
+                existing.max_turns = sc.get("max_turns", 10)
+                existing.max_duration_seconds = sc.get("max_duration_seconds", 120)
+            else:
+                db.add(Scenario(**{k: v for k, v in sc.items()}))
+                agent_scenarios_added += 1
+
         await db.commit()
         providers = {}
         for m in MODELS:
@@ -802,7 +1026,9 @@ async def seed():
             f"{scenarios_added}/{len(SCENARIOS)} scenarios, "
             f"{prompts_added}/{len(PROMPTS)} TTS prompts, "
             f"{s2s_prompts_added}/{len(S2S_PROMPTS)} S2S curated prompts, "
-            f"and {clips_added}/{len(STT_CLIPS)} STT audio clips."
+            f"{clips_added}/{len(STT_CLIPS)} STT audio clips, "
+            f"{configs_added}/{len(AGENT_CONFIGS)} agent configs, "
+            f"and {agent_scenarios_added}/{len(AGENT_SCENARIOS)} agent scenarios."
         )
 
 

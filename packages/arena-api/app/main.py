@@ -25,7 +25,7 @@ app.add_middleware(
 )
 
 
-from app.routers import models, scenarios, evaluations, battles, leaderboard, analytics, prompts, tts, subscribers, developers, experiments
+from app.routers import models, scenarios, evaluations, battles, leaderboard, analytics, prompts, tts, subscribers, developers, experiments, agent_ws
 
 app.include_router(models.router)
 app.include_router(scenarios.router)
@@ -38,6 +38,7 @@ app.include_router(tts.router)
 app.include_router(subscribers.router)
 app.include_router(developers.router)
 app.include_router(experiments.router)
+app.include_router(agent_ws.router)
 
 
 @app.get("/api/v1/health")

@@ -9,8 +9,8 @@ class Battle(Base, TimestampMixin):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
     scenario_id: Mapped[str] = mapped_column(String, ForeignKey("scenarios.id"), nullable=False)
-    model_a_id: Mapped[str] = mapped_column(String, ForeignKey("models.id"), nullable=False)
-    model_b_id: Mapped[str] = mapped_column(String, ForeignKey("models.id"), nullable=False)
+    model_a_id: Mapped[str | None] = mapped_column(String, ForeignKey("models.id"), nullable=True)
+    model_b_id: Mapped[str | None] = mapped_column(String, ForeignKey("models.id"), nullable=True)
     eval_a_id: Mapped[str | None] = mapped_column(String, ForeignKey("evaluations.id"), nullable=True)
     eval_b_id: Mapped[str | None] = mapped_column(String, ForeignKey("evaluations.id"), nullable=True)
     model_c_id: Mapped[str | None] = mapped_column(String, ForeignKey("models.id"), nullable=True)

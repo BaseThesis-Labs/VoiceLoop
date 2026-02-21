@@ -15,8 +15,14 @@ from fastapi import File, Form, UploadFile
 from app.schemas.battle import BattleCreate, BattleVote, BattleResponse, BattleGenerateResponse, BattleGenerateRequest
 from app.schemas.s2s import CuratedPromptItem, S2SBattleSetupResponse, S2SBattleResponse, S2SMetricsResponse, S2SModelMetrics
 from app.schemas.stt import AudioClipItem, STTBattleSetupResponse, STTBattleResponse, STTTranscriptItem, STTMetricsResponse, STTModelMetrics, STTDiffItem
+from app.schemas.agent import AgentBattleSetupResponse, ScenarioItem, AgentConfigItem, AgentVoteRequest, AgentMetricsResponse, AgentModelMetrics
+from app.models.agent_configuration import AgentConfiguration
+from app.models.agent_conversation import AgentConversation
+from app.models.agent_battle import AgentBattle
+from app.models.scenario import Scenario
 from app.services.elo import update_elo
 from app.services.tts_service import generate_tts
+import uuid
 
 logger = logging.getLogger("arena.battles")
 
@@ -38,7 +44,7 @@ async def generate_battle(
     battle_type = body.battle_type if body else "tts"
     if battle_type not in VALID_BATTLE_TYPES:
         raise HTTPException(status_code=400, detail=f"battle_type must be one of {VALID_BATTLE_TYPES}")
-    if battle_type not in ("tts", "s2s", "stt"):
+    if battle_type not in ("tts", "s2s", "stt", "agent"):
         raise HTTPException(status_code=501, detail=f"{battle_type} battles are not yet implemented")
 
     # --- S2S: Step 1 — select models, return setup response ---
@@ -48,6 +54,10 @@ async def generate_battle(
     # --- STT: Step 1 — select models, return setup response ---
     if battle_type == "stt":
         return await _generate_stt_battle(db)
+
+    # --- Agent: Step 1 — select scenario + configs, return setup ---
+    if battle_type == "agent":
+        return await _generate_agent_battle(db)
 
     # 1. Pick random prompt
     prompt_count = (await db.execute(select(func.count(Prompt.id)))).scalar_one()
@@ -265,6 +275,57 @@ async def vote_battle(
         valid_choices.add("d")
     if body.winner not in valid_choices:
         raise HTTPException(status_code=400, detail=f"winner must be one of {valid_choices}")
+
+    # Agent battles: update agent config ELO, not voice model ELO
+    if battle.battle_type == "agent":
+        agent_battle = (await db.execute(
+            select(AgentBattle).where(AgentBattle.battle_id == battle_id)
+        )).scalar_one_or_none()
+
+        if agent_battle:
+            configs_result = await db.execute(
+                select(AgentConfiguration).where(
+                    AgentConfiguration.id.in_([agent_battle.config_a_id, agent_battle.config_b_id])
+                )
+            )
+            configs_map = {c.id: c for c in configs_result.scalars().all()}
+
+            label_to_config_id = {"a": agent_battle.config_a_id, "b": agent_battle.config_b_id}
+
+            if body.winner not in ("tie", "all_bad"):
+                winner_config_id = label_to_config_id[body.winner]
+                winner_config = configs_map.get(winner_config_id)
+                if winner_config:
+                    for label, cid in label_to_config_id.items():
+                        if label == body.winner:
+                            continue
+                        loser_config = configs_map.get(cid)
+                        if loser_config:
+                            new_w, new_l, delta = update_elo(winner_config.elo_rating, loser_config.elo_rating, "a")
+                            winner_config.elo_rating = new_w
+                            loser_config.elo_rating = new_l
+                            loser_config.total_battles += 1
+                    winner_config.total_battles += 1
+                    total_wins = round(winner_config.win_rate * (winner_config.total_battles - 1)) + 1
+                    winner_config.win_rate = total_wins / winner_config.total_battles
+            elif body.winner == "tie":
+                for cid in label_to_config_id.values():
+                    c = configs_map.get(cid)
+                    if c:
+                        c.total_battles += 1
+
+            # Store sub_votes on agent_battle
+            if body.sub_votes:
+                agent_battle.sub_votes_json = body.sub_votes
+
+        battle.winner = body.winner
+        battle.vote_source = "human"
+        if body.sub_votes:
+            battle.sub_votes = body.sub_votes
+
+        await db.commit()
+        await db.refresh(battle)
+        return battle
 
     # Collect all participating models
     model_ids = [battle.model_a_id, battle.model_b_id]
@@ -914,4 +975,204 @@ async def get_battle_metrics(battle_id: str, db: AsyncSession = Depends(get_db))
         model_names=model_names or None,
         providers=providers or None,
         metrics=metrics or None,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Agent helpers and endpoints
+# ---------------------------------------------------------------------------
+
+async def _generate_agent_battle(db: AsyncSession):
+    """Generate an agent battle: pick a random scenario + 2 agent configs from different providers."""
+    # Pick a random scenario that has a system_prompt (agent-enabled)
+    result = await db.execute(
+        select(Scenario)
+        .where(Scenario.system_prompt.isnot(None))
+        .order_by(func.random())
+        .limit(1)
+    )
+    scenario = result.scalar_one_or_none()
+    if not scenario:
+        raise HTTPException(status_code=404, detail="No agent scenarios available. Run seed script.")
+
+    # Get all agent configs, group by provider
+    result = await db.execute(select(AgentConfiguration))
+    all_configs = result.scalars().all()
+    if len(all_configs) < 2:
+        raise HTTPException(status_code=404, detail="Need at least 2 agent configurations. Run seed script.")
+
+    by_provider: dict[str, list] = {}
+    for c in all_configs:
+        by_provider.setdefault(c.provider, []).append(c)
+
+    # Pick one config per provider, then select 2
+    selected = []
+    for provider_configs in by_provider.values():
+        selected.append(random.choice(provider_configs))
+    random.shuffle(selected)
+    selected = selected[:2]
+
+    if len(selected) < 2:
+        # If only one provider, pick two different configs from it
+        all_shuffled = list(all_configs)
+        random.shuffle(all_shuffled)
+        selected = all_shuffled[:2]
+
+    # Create Battle record (model_a_id/model_b_id are NULL for agent battles)
+    battle_id = str(uuid.uuid4())
+    battle = Battle(
+        id=battle_id,
+        scenario_id=scenario.id,
+        battle_type="agent",
+    )
+    db.add(battle)
+
+    # Create AgentBattle record
+    agent_battle = AgentBattle(
+        battle_id=battle_id,
+        formulation="outcome",
+        scenario_id=scenario.id,
+        config_a_id=selected[0].id,
+        config_b_id=selected[1].id,
+    )
+    db.add(agent_battle)
+    await db.commit()
+
+    return AgentBattleSetupResponse(
+        id=battle_id,
+        scenario=ScenarioItem(
+            id=scenario.id,
+            name=scenario.name,
+            category=scenario.category,
+            difficulty=scenario.difficulty,
+            description=scenario.description,
+            max_turns=scenario.max_turns,
+            max_duration_seconds=scenario.max_duration_seconds,
+        ),
+        config_a=AgentConfigItem(
+            id=selected[0].id,
+            name=selected[0].name,
+            architecture_type=selected[0].architecture_type,
+            provider=selected[0].provider,
+            components=selected[0].components_json,
+        ),
+        config_b=AgentConfigItem(
+            id=selected[1].id,
+            name=selected[1].name,
+            architecture_type=selected[1].architecture_type,
+            provider=selected[1].provider,
+            components=selected[1].components_json,
+        ),
+        agent_battle_id=agent_battle.id,
+    )
+
+
+@router.get("/{battle_id}/agent-metrics", response_model=AgentMetricsResponse)
+async def get_agent_metrics(battle_id: str, db: AsyncSession = Depends(get_db)):
+    """Get progressive post-vote metrics for an agent battle."""
+    battle = (await db.execute(select(Battle).where(Battle.id == battle_id))).scalar_one_or_none()
+    if not battle or battle.battle_type != "agent":
+        raise HTTPException(status_code=404, detail="Agent battle not found")
+    if not battle.winner:
+        raise HTTPException(status_code=400, detail="Vote not yet submitted")
+
+    agent_battle = (await db.execute(
+        select(AgentBattle).where(AgentBattle.battle_id == battle_id)
+    )).scalar_one_or_none()
+    if not agent_battle:
+        raise HTTPException(status_code=404, detail="Agent battle record not found")
+
+    scenario = (await db.execute(
+        select(Scenario).where(Scenario.id == agent_battle.scenario_id)
+    )).scalar_one_or_none()
+
+    # Load conversations
+    conv_a = None
+    conv_b = None
+    if agent_battle.conversation_a_id:
+        conv_a = (await db.execute(
+            select(AgentConversation).where(AgentConversation.id == agent_battle.conversation_a_id)
+        )).scalar_one_or_none()
+    if agent_battle.conversation_b_id:
+        conv_b = (await db.execute(
+            select(AgentConversation).where(AgentConversation.id == agent_battle.conversation_b_id)
+        )).scalar_one_or_none()
+
+    # Load configs
+    config_a = (await db.execute(
+        select(AgentConfiguration).where(AgentConfiguration.id == agent_battle.config_a_id)
+    )).scalar_one_or_none()
+    config_b = (await db.execute(
+        select(AgentConfiguration).where(AgentConfiguration.id == agent_battle.config_b_id)
+    )).scalar_one_or_none()
+
+    # Check if automated eval is done
+    automated_eval = agent_battle.automated_eval_json
+    status = "complete" if automated_eval else ("partial" if conv_a and conv_b else "computing")
+
+    # If no eval yet and both conversations exist, kick off eval
+    if not automated_eval and conv_a and conv_b and scenario:
+        from app.services.agent_eval_service import evaluate_agent_conversation
+        from app.database import async_session as async_session_factory
+
+        async def run_eval():
+            eval_a = await evaluate_agent_conversation(
+                conv_a.turns_json or [],
+                scenario.description,
+                scenario.success_criteria,
+                scenario.required_slots,
+            )
+            eval_b = await evaluate_agent_conversation(
+                conv_b.turns_json or [],
+                scenario.description,
+                scenario.success_criteria,
+                scenario.required_slots,
+            )
+            result = {"a": eval_a, "b": eval_b}
+            async with async_session_factory() as eval_db:
+                ab = (await eval_db.execute(
+                    select(AgentBattle).where(AgentBattle.battle_id == battle_id)
+                )).scalar_one()
+                ab.automated_eval_json = result
+                if eval_a.get("task_success") is not None and conv_a:
+                    ca = (await eval_db.execute(
+                        select(AgentConversation).where(AgentConversation.id == conv_a.id)
+                    )).scalar_one()
+                    ca.task_success = eval_a.get("task_success")
+                    ca.joint_goal_accuracy = eval_a.get("joint_goal_accuracy")
+                if eval_b.get("task_success") is not None and conv_b:
+                    cb = (await eval_db.execute(
+                        select(AgentConversation).where(AgentConversation.id == conv_b.id)
+                    )).scalar_one()
+                    cb.task_success = eval_b.get("task_success")
+                    cb.joint_goal_accuracy = eval_b.get("joint_goal_accuracy")
+                await eval_db.commit()
+
+        asyncio.create_task(run_eval())
+        status = "computing"
+
+    def _build_metrics(conv, config, label) -> AgentModelMetrics | None:
+        if not conv or not config:
+            return None
+        return AgentModelMetrics(
+            agent_label=label,
+            config_name=config.name,
+            provider=config.provider,
+            components=config.components_json,
+            total_turns=conv.total_turns,
+            duration_seconds=conv.duration_seconds,
+            avg_latency_ms=conv.avg_response_latency_ms,
+            p50_latency_ms=conv.p50_latency_ms,
+            p95_latency_ms=conv.p95_latency_ms,
+            task_success=conv.task_success,
+            joint_goal_accuracy=conv.joint_goal_accuracy,
+            containment=conv.containment,
+        )
+
+    return AgentMetricsResponse(
+        status=status,
+        scenario_name=scenario.name if scenario else None,
+        metrics_a=_build_metrics(conv_a, config_a, "a"),
+        metrics_b=_build_metrics(conv_b, config_b, "b"),
+        automated_eval=automated_eval,
     )
