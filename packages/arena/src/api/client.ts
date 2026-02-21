@@ -55,6 +55,7 @@ export interface Battle {
   eval_a_id: string | null;
   eval_b_id: string | null;
   winner: string | null;
+  battle_type: string;
   vote_source: string | null;
   elo_delta: number | null;
   created_at: string;
@@ -92,6 +93,7 @@ export interface PromptItem {
 
 export interface GeneratedBattle {
   id: string;
+  battle_type: string;
   prompt_text: string;
   prompt_category: string;
   audio_a_url: string;
@@ -188,13 +190,20 @@ export const api = {
     get: (id: string) => request<Battle>(`/battles/${id}`),
     create: (data: { scenario_id: string; model_a_id: string; model_b_id: string }) =>
       request<Battle>('/battles', { method: 'POST', body: JSON.stringify(data) }),
-    vote: (battleId: string, winner: 'a' | 'b' | 'c' | 'd' | 'tie' | 'all_bad') =>
+    vote: (
+      battleId: string,
+      winner: 'a' | 'b' | 'c' | 'd' | 'tie' | 'all_bad',
+      subVotes?: Record<string, string>,
+    ) =>
       request<Battle>(`/battles/${battleId}/vote`, {
         method: 'POST',
-        body: JSON.stringify({ winner }),
+        body: JSON.stringify({ winner, ...(subVotes ? { sub_votes: subVotes } : {}) }),
       }),
-    generate: () =>
-      request<GeneratedBattle>('/battles/generate', { method: 'POST' }),
+    generate: (battleType: string = 'tts') =>
+      request<GeneratedBattle>('/battles/generate', {
+        method: 'POST',
+        body: JSON.stringify({ battle_type: battleType }),
+      }),
   },
 
   tts: {
@@ -211,7 +220,8 @@ export const api = {
   },
 
   leaderboard: {
-    current: () => request<LeaderboardEntry[]>('/leaderboard'),
+    current: (battleType: string = 'tts') =>
+      request<LeaderboardEntry[]>(`/leaderboard?battle_type=${battleType}`),
     history: (modelId?: string) =>
       request<{ model_id: string; model_name: string; elo_rating: number; snapshot_date: string }[]>(
         `/leaderboard/history${modelId ? `?model_id=${modelId}` : ''}`
