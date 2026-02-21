@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     hume_api_key: str = ""
     s2s_timeout_seconds: int = 8
+    assemblyai_api_key: str = ""
+    google_cloud_api_key: str = ""
+    stt_timeout_seconds: int = 30
     enable_diarization: bool = True
     default_num_speakers: int = 2
     api_host: str = "0.0.0.0"

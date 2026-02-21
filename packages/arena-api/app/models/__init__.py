@@ -9,5 +9,6 @@ from app.models.prompt import Prompt
 from app.models.subscriber import Subscriber
 from app.models.developer import Developer
 from app.models.experiment import Experiment, Trial
+from app.models.audio_clip import AudioClip
 
-__all__ = ["Base", "VoiceModel", "Scenario", "Evaluation", "Battle", "LeaderboardSnapshot", "User", "Prompt", "Subscriber", "Developer", "Experiment", "Trial"]
+__all__ = ["Base", "VoiceModel", "Scenario", "Evaluation", "Battle", "LeaderboardSnapshot", "User", "Prompt", "Subscriber", "Developer", "Experiment", "Trial", "AudioClip"]
