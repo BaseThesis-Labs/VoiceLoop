@@ -10,5 +10,8 @@ from app.models.subscriber import Subscriber
 from app.models.developer import Developer
 from app.models.experiment import Experiment, Trial
 from app.models.audio_clip import AudioClip
+from app.models.agent_configuration import AgentConfiguration
+from app.models.agent_conversation import AgentConversation
+from app.models.agent_battle import AgentBattle
 
-__all__ = ["Base", "VoiceModel", "Scenario", "Evaluation", "Battle", "LeaderboardSnapshot", "User", "Prompt", "Subscriber", "Developer", "Experiment", "Trial", "AudioClip"]
+__all__ = ["Base", "VoiceModel", "Scenario", "Evaluation", "Battle", "LeaderboardSnapshot", "User", "Prompt", "Subscriber", "Developer", "Experiment", "Trial", "AudioClip", "AgentConfiguration", "AgentConversation", "AgentBattle"]
