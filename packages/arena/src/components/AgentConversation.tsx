@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Mic, MicOff, PhoneOff, Loader2 } from 'lucide-react'
 import WaveformVisualizer from './WaveformVisualizer'
-import type { AgentConversationTurn, AgentConversationEnd } from '../api/client'
+import type { AgentConversationEnd } from '../api/client'
 
 interface AgentConversationProps {
   wsUrl: string
@@ -25,7 +25,7 @@ export default function AgentConversation({
 }: AgentConversationProps) {
   const [state, setState] = useState<ConvState>('connecting')
   const [elapsedMs, setElapsedMs] = useState(0)
-  const [transcript, setTranscript] = useState<AgentConversationTurn[]>([])
+  const [transcript, setTranscript] = useState<Array<{ role: string; text: string }>>([])
   const [isMuted, setIsMuted] = useState(false)
 
   const wsRef = useRef<WebSocket | null>(null)
@@ -87,7 +87,7 @@ export default function AgentConversation({
     isPlayingRef.current = true
     const samples = playbackQueueRef.current.shift()!
     const buffer = audioContextRef.current.createBuffer(1, samples.length, 16000)
-    buffer.copyToChannel(samples, 0)
+    buffer.copyToChannel(new Float32Array(samples.buffer.slice(0) as ArrayBuffer), 0)
     const source = audioContextRef.current.createBufferSource()
     source.buffer = buffer
     source.connect(audioContextRef.current.destination)
@@ -167,6 +167,8 @@ export default function AgentConversation({
               const msg = JSON.parse(event.data)
               if (msg.type === 'session_started') {
                 // Session confirmed
+              } else if (msg.type === 'transcript') {
+                setTranscript((prev) => [...prev, { role: msg.role, text: msg.text }])
               } else if (msg.type === 'clear') {
                 // Interrupt — clear playback queue
                 playbackQueueRef.current = []
