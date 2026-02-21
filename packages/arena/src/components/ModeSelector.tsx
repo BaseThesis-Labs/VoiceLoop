@@ -32,7 +32,7 @@ const MODES: ModeOption[] = [
     label: 'STT',
     icon: <Mic size={14} />,
     subtitle: 'Compare how different models transcribe the same audio',
-    enabled: false,
+    enabled: true,
   },
   {
     key: 'agent',

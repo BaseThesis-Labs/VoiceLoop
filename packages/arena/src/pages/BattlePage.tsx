@@ -14,6 +14,7 @@ import VoteButton from '../components/VoteButton'
 import { api, type GeneratedBattle } from '../api/client'
 import { ModeSelector, getStoredMode, type BattleMode } from '../components/ModeSelector'
 import S2SBattlePage from './S2SBattlePage'
+import STTBattlePage from './STTBattlePage'
 
 // ---- Types ----
 type ModelLabel = 'a' | 'b' | 'c' | 'd'
@@ -197,6 +198,11 @@ export default function BattlePage() {
   // Route to S2S battle page when in S2S mode
   if (battleMode === 's2s') {
     return <S2SBattlePage onModeChange={handleModeChange} battleCount={battleCount} />
+  }
+
+  // Route to STT battle page when in STT mode
+  if (battleMode === 'stt') {
+    return <STTBattlePage onModeChange={handleModeChange} battleCount={battleCount} />
   }
 
   return (
