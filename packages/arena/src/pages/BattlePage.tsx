@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import WaveformVisualizer from '../components/WaveformVisualizer'
 import { api, type GeneratedBattle } from '../api/client'
+import { ModeSelector, getStoredMode, type BattleMode } from '../components/ModeSelector'
 
 // ---- Types ----
 type ModelLabel = 'a' | 'b' | 'c' | 'd'
@@ -50,6 +51,7 @@ export default function BattlePage() {
   const [error, setError] = useState<string | null>(null)
   const [battleCount, setBattleCount] = useState(0)
   const [voting, setVoting] = useState(false)
+  const [battleMode, setBattleMode] = useState<BattleMode>(getStoredMode)
 
   // Audio refs + progress
   const audioRefs = {
@@ -76,7 +78,7 @@ export default function BattlePage() {
     setError(null)
     setBattle(null)
     try {
-      const result = await api.battles.generate()
+      const result = await api.battles.generate(battleMode)
       setBattle(result)
       setBattleCount((c) => c + 1)
     } catch (e) {
@@ -84,7 +86,7 @@ export default function BattlePage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [battleMode])
 
   useEffect(() => {
     loadBattle()
@@ -169,6 +171,19 @@ export default function BattlePage() {
     loadBattle()
   }
 
+  function handleModeChange(mode: BattleMode) {
+    setBattleMode(mode)
+  }
+
+  useEffect(() => {
+    // Reset state when mode changes
+    setPlaying(null)
+    setVoted(null)
+    setRevealed(false)
+    setHasPlayed({ a: false, b: false, c: false, d: false })
+    setProgress({ a: 0, b: 0, c: 0, d: 0 })
+  }, [battleMode])
+
   function getModelInfo(label: ModelLabel) {
     if (!battle) return { name: '', provider: '', duration: 0, ttfb: 0 }
     const map: Record<ModelLabel, { name: string; provider: string; duration: number; ttfb: number }> = {
@@ -193,23 +208,21 @@ export default function BattlePage() {
           </>
         )}
 
-        {/* Header Bar */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <h1 className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.2em] text-text-faint">
-              Voice Model Battle
-            </h1>
+        {/* Header + Mode Selector */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Zap size={14} className="text-accent" />
+              <span className="font-[family-name:var(--font-mono)] text-sm text-text-body">
+                Battle <span className="text-text-primary">#{battleCount}</span>
+              </span>
+            </div>
             <button className="flex items-center gap-1.5 text-xs text-text-body hover:text-text-primary transition-colors group">
               <HelpCircle size={14} className="text-text-faint group-hover:text-text-body transition-colors" />
               How it works
             </button>
           </div>
-          <div className="flex items-center gap-2">
-            <Zap size={14} className="text-accent" />
-            <span className="font-[family-name:var(--font-mono)] text-sm text-text-body">
-              Battle <span className="text-text-primary">#{battleCount}</span>
-            </span>
-          </div>
+          <ModeSelector active={battleMode} onChange={handleModeChange} />
         </div>
 
         {/* Loading State */}

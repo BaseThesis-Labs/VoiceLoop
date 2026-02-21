@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Trophy, ChevronDown, ArrowUpDown, ExternalLink } from 'lucide-react'
+import { Trophy, ExternalLink } from 'lucide-react'
 import {
   Radar,
   RadarChart,
@@ -11,20 +11,7 @@ import {
 } from 'recharts'
 import { Link } from 'react-router-dom'
 import { api, type LeaderboardEntry } from '../api/client'
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type Category = 'all' | 'tts' | 'asr' | 's2s' | 'conversational'
-
-const categoryLabels: { key: Category; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'tts', label: 'TTS' },
-  { key: 'asr', label: 'ASR' },
-  { key: 's2s', label: 'S2S' },
-  { key: 'conversational', label: 'Conversational' },
-]
+import { ModeSelector, getStoredMode, type BattleMode } from '../components/ModeSelector'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -133,42 +120,6 @@ function buildRadarData(
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function CategoryPills({
-  active,
-  onChange,
-}: {
-  active: Category
-  onChange: (c: Category) => void
-}) {
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {categoryLabels.map((c) => (
-        <button
-          key={c.key}
-          onClick={() => onChange(c.key)}
-          className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
-            active === c.key
-              ? 'bg-accent/10 text-accent border-accent/20'
-              : 'text-text-body border-border-default hover:text-text-primary hover:border-border-strong'
-          }`}
-        >
-          {c.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function SortButton() {
-  return (
-    <button className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-text-body rounded-lg border border-border-default hover:text-text-primary hover:border-border-strong transition-colors">
-      <ArrowUpDown size={13} />
-      <span className="font-[family-name:var(--font-mono)]">ELO Rating</span>
-      <ChevronDown size={13} />
-    </button>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Leaderboard Table
@@ -390,13 +341,14 @@ function RadarComparison({
 // ---------------------------------------------------------------------------
 
 export default function LeaderboardPage() {
-  const [activeCategory, setActiveCategory] = useState<Category>('all')
+  const [activeMode, setActiveMode] = useState<BattleMode>(getStoredMode)
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    setLoading(true)
     api.leaderboard
-      .current()
+      .current(activeMode)
       .then((data) => {
         setEntries(data)
       })
@@ -404,17 +356,7 @@ export default function LeaderboardPage() {
         // API unavailable — show empty state
       })
       .finally(() => setLoading(false))
-  }, [])
-
-  // Filter by provider/category if needed
-  const TTS_PROVIDERS = ['cartesia', 'smallestai', 'deepgram']
-  const filtered = useMemo(() => {
-    if (activeCategory === 'all') return entries
-    if (activeCategory === 'tts') {
-      return entries.filter((e) => TTS_PROVIDERS.includes(e.provider))
-    }
-    return entries
-  }, [activeCategory, entries])
+  }, [activeMode])
 
   // Top 3 entries with battles for radar
   const radarEntries = useMemo(() => {
@@ -442,21 +384,14 @@ export default function LeaderboardPage() {
           </p>
         </motion.div>
 
-        {/* ---- Filter Bar ---- */}
+        {/* ---- Mode Selector ---- */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.1 }}
-          className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6"
+          className="mb-6"
         >
-          <CategoryPills
-            active={activeCategory}
-            onChange={setActiveCategory}
-          />
-
-          <div className="sm:ml-auto">
-            <SortButton />
-          </div>
+          <ModeSelector active={activeMode} onChange={setActiveMode} />
         </motion.div>
 
         {/* ---- Main Leaderboard Table ---- */}
@@ -472,14 +407,14 @@ export default function LeaderboardPage() {
                 Loading leaderboard...
               </p>
             </div>
-          ) : filtered.length === 0 ? (
+          ) : entries.length === 0 ? (
             <div className="bg-bg-surface rounded-xl border border-border-default p-12 text-center">
               <p className="text-text-faint text-sm">
                 No models ranked yet. Start some battles first!
               </p>
             </div>
           ) : (
-            <LeaderboardTable entries={filtered} />
+            <LeaderboardTable entries={entries} />
           )}
         </motion.div>
 
