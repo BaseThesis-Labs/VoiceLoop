@@ -286,6 +286,105 @@ async def get_model_breakdown(
     }
 
 
+@router.get("/provider-comparison")
+async def get_provider_comparison(
+    battle_type: str = "tts",
+    db: AsyncSession = Depends(get_db),
+):
+    """Compare providers by aggregating model stats and evaluation metrics."""
+
+    # 1. Load all models for the given battle type, grouped by provider
+    models_result = await db.execute(
+        select(VoiceModel).where(VoiceModel.model_type == battle_type)
+    )
+    models = models_result.scalars().all()
+
+    if not models:
+        return []
+
+    # Group models by provider
+    providers: dict[str, list[VoiceModel]] = {}
+    for m in models:
+        providers.setdefault(m.provider, []).append(m)
+
+    # 2. Batch-load completed evaluations for all matching model IDs
+    all_model_ids = [m.id for m in models]
+    evals_result = await db.execute(
+        select(Evaluation).where(
+            Evaluation.model_id.in_(all_model_ids),
+            Evaluation.status == "completed",
+        )
+    )
+    evaluations = evals_result.scalars().all()
+
+    # Index evaluations by model_id
+    evals_by_model: dict[str, list[Evaluation]] = {}
+    for ev in evaluations:
+        evals_by_model.setdefault(ev.model_id, []).append(ev)
+
+    # 3. Build per-provider stats
+    result = []
+    for provider, provider_models in sorted(providers.items()):
+        model_count = len(provider_models)
+        total_battles = sum(m.total_battles for m in provider_models)
+        avg_elo = sum(m.elo_rating for m in provider_models) / model_count
+        avg_win_rate = sum(m.win_rate for m in provider_models) / model_count
+
+        # Collect all evaluations for this provider's models
+        provider_evals: list[Evaluation] = []
+        for m in provider_models:
+            provider_evals.extend(evals_by_model.get(m.id, []))
+
+        # Compute average TTFB from evaluation column
+        ttfb_values = [e.ttfb_ms for e in provider_evals if e.ttfb_ms is not None]
+        avg_ttfb = sum(ttfb_values) / len(ttfb_values) if ttfb_values else None
+
+        # Compute average metrics from metrics_json
+        prosody_values = []
+        nisqa_values = []
+        dnsmos_values = []
+        for ev in provider_evals:
+            mj = ev.metrics_json or {}
+            if mj.get("prosody_score") is not None:
+                prosody_values.append(mj["prosody_score"])
+            if mj.get("nisqa_overall") is not None:
+                nisqa_values.append(mj["nisqa_overall"])
+            if mj.get("dnsmos_overall") is not None:
+                dnsmos_values.append(mj["dnsmos_overall"])
+
+        avg_prosody = (
+            sum(prosody_values) / len(prosody_values) if prosody_values else None
+        )
+        avg_nisqa = (
+            sum(nisqa_values) / len(nisqa_values) if nisqa_values else None
+        )
+        avg_dnsmos = (
+            sum(dnsmos_values) / len(dnsmos_values) if dnsmos_values else None
+        )
+
+        result.append(
+            {
+                "provider": provider,
+                "model_count": model_count,
+                "total_battles": total_battles,
+                "avg_elo": round(avg_elo, 1),
+                "avg_win_rate": round(avg_win_rate, 4),
+                "avg_ttfb": round(avg_ttfb, 1) if avg_ttfb is not None else None,
+                "avg_prosody": (
+                    round(avg_prosody, 4) if avg_prosody is not None else None
+                ),
+                "avg_nisqa": (
+                    round(avg_nisqa, 4) if avg_nisqa is not None else None
+                ),
+                "avg_dnsmos": (
+                    round(avg_dnsmos, 4) if avg_dnsmos is not None else None
+                ),
+            }
+        )
+
+    return result
+
+
 def _sanitize_csv_value(value: str) -> str:
     """Prevent CSV injection by escaping formula-triggering characters."""
     if value and value[0] in ("=", "+", "-", "@", "\t", "\r"):
