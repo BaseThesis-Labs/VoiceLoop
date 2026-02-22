@@ -29,6 +29,8 @@ class BattleResponse(BaseModel):
     elo_delta: float | None
     battle_type: str = "tts"
     input_audio_path: str | None = None
+    prompt_id: str | None = None
+    prompt_text: str | None = None
     sub_votes: dict | None = None
     created_at: datetime
 

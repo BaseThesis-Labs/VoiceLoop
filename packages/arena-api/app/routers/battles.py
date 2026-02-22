@@ -130,6 +130,8 @@ async def generate_battle(
             audio_path=tts_results[i]["audio_path"],
             transcript_ref=prompt.text,
             duration_seconds=tts_results[i]["duration_seconds"],
+            ttfb_ms=tts_results[i].get("ttfb_ms"),
+            generation_time_ms=tts_results[i].get("generation_time_ms"),
         )
         db.add(ev)
         evals.append(ev)
@@ -150,6 +152,8 @@ async def generate_battle(
     battle = Battle(
         scenario_id=scenario_id,
         battle_type=battle_type,
+        prompt_id=prompt.id,
+        prompt_text=prompt.text,
         model_a_id=selected[0].id,
         model_b_id=selected[1].id,
         model_c_id=selected[2].id if len(selected) > 2 else None,
@@ -525,6 +529,7 @@ async def submit_stt_input_audio(
         raise HTTPException(status_code=400, detail="Must provide either audio file or curated_clip_id")
 
     battle.input_audio_path = input_path
+    battle.prompt_text = ground_truth
     await db.flush()
 
     model_ids = [battle.model_a_id, battle.model_b_id]
@@ -572,6 +577,8 @@ async def submit_stt_input_audio(
             audio_path=input_path,
             transcript_output=ok_results[i]["transcript"],
             transcript_ref=ground_truth,
+            ttfb_ms=ok_results[i].get("ttfb_ms"),
+            e2e_latency_ms=ok_results[i].get("e2e_latency_ms"),
         )
         db.add(ev)
         evals.append(ev)
@@ -805,6 +812,7 @@ async def submit_s2s_input_audio(
         raise HTTPException(status_code=400, detail="Input audio already submitted")
 
     # 2. Determine input source
+    prompt = None
     if audio:
         os.makedirs(settings.audio_storage_path, exist_ok=True)
         input_filename = f"{_uuid.uuid4()}.webm"
@@ -831,8 +839,11 @@ async def submit_s2s_input_audio(
     else:
         raise HTTPException(status_code=400, detail="Must provide either audio file or curated_prompt_id")
 
-    # Store input audio path
+    # Store input audio path and prompt info
     battle.input_audio_path = input_path
+    if curated_prompt_id and prompt:
+        battle.prompt_id = prompt.id
+        battle.prompt_text = prompt.text
     await db.flush()
 
     # 3. Load selected models
@@ -885,6 +896,8 @@ async def submit_s2s_input_audio(
             status="pending",
             audio_path=ok_results[i]["audio_path"],
             duration_seconds=ok_results[i]["duration_seconds"],
+            ttfb_ms=ok_results[i].get("ttfb_ms"),
+            e2e_latency_ms=ok_results[i].get("e2e_latency_ms"),
         )
         db.add(ev)
         evals.append(ev)
@@ -1070,6 +1083,7 @@ async def _generate_agent_battle(db: AsyncSession):
         id=battle_id,
         scenario_id=scenario.id,
         battle_type="agent",
+        prompt_text=scenario.description,
     )
     db.add(battle)
     await db.flush()  # Flush so Battle exists for AgentBattle FK

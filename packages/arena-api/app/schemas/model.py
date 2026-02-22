@@ -21,6 +21,7 @@ class ModelResponse(BaseModel):
     name: str
     provider: str
     version: str
+    model_type: str = "tts"
     config_json: dict | None
     elo_rating: float
     total_battles: int
