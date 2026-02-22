@@ -16,11 +16,12 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  Legend,
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts'
 import { arenaStats as mockArenaStats, metricCorrelations, fairnessData } from '../data/mockData'
-import { api, type AnalyticsSummary } from '../api/client'
+import { api, type AnalyticsSummary, type ProviderComparison } from '../api/client'
 import { ModeSelector, getStoredMode, type BattleMode } from '../components/ModeSelector'
 
 // ============================================================
@@ -40,7 +41,7 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { id: 'votes', label: 'Vote Analytics' },
-  { id: 'correlations', label: 'Metric Correlations' },
+  { id: 'correlations', label: 'Provider Comparison' },
   { id: 'fairness', label: 'Fairness' },
   { id: 'papers', label: 'Papers' },
   { id: 'dataset', label: 'Dataset' },
@@ -371,7 +372,80 @@ function VoteAnalyticsTab({ apiSummary, activeMode }: { apiSummary: AnalyticsSum
   )
 }
 
-function MetricCorrelationsTab() {
+const COMPARISON_METRIC_COLORS: Record<string, string> = {
+  Prosody: '#2DD4A8',
+  NISQA: '#6366f1',
+  DNSMOS: '#f59e0b',
+  'TTFB (inv)': '#ec4899',
+}
+
+function normalizeProviderMetrics(providers: ProviderComparison[]) {
+  const maxTtfb = Math.max(...providers.map((p) => p.avg_ttfb), 1)
+  return providers.map((p) => ({
+    provider: p.provider,
+    Prosody: Math.round(p.avg_prosody * 100),
+    NISQA: Math.round(((p.avg_nisqa - 1) / 4) * 100),
+    DNSMOS: Math.round(((p.avg_dnsmos - 1) / 4) * 100),
+    'TTFB (inv)': Math.round(Math.max(0, (1 - p.avg_ttfb / maxTtfb) * 100)),
+  }))
+}
+
+function ProviderComparisonTab({ activeMode }: { activeMode: string }) {
+  const [providers, setProviders] = useState<ProviderComparison[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    setError(null)
+    api.analytics
+      .providerComparison(activeMode)
+      .then((data) => {
+        setProviders(data)
+        setLoading(false)
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load provider data')
+        setLoading(false)
+      })
+  }, [activeMode])
+
+  if (loading) {
+    return (
+      <motion.div
+        key="correlations"
+        variants={fadeIn}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="flex items-center justify-center py-20"
+      >
+        <div className="text-text-faint font-[family-name:var(--font-mono)] text-sm">
+          Loading provider comparison...
+        </div>
+      </motion.div>
+    )
+  }
+
+  if (error || providers.length === 0) {
+    return (
+      <motion.div
+        key="correlations"
+        variants={fadeIn}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="flex items-center justify-center py-20"
+      >
+        <div className="text-text-faint font-[family-name:var(--font-mono)] text-sm">
+          {error || 'No provider data available for this mode.'}
+        </div>
+      </motion.div>
+    )
+  }
+
+  const chartData = normalizeProviderMetrics(providers)
+
   return (
     <motion.div
       key="correlations"
@@ -381,7 +455,7 @@ function MetricCorrelationsTab() {
       exit="exit"
       className="space-y-8"
     >
-      {/* Correlation Table */}
+      {/* Grouped Bar Chart */}
       <motion.div
         variants={slideUp}
         initial="hidden"
@@ -389,10 +463,62 @@ function MetricCorrelationsTab() {
         className="bg-bg-surface rounded-xl border border-border-default p-6"
       >
         <h3 className="font-[family-name:var(--font-display)] text-lg text-text-primary mb-1">
-          Correlation of Arena Score with Automated Metrics
+          Provider Comparison — Normalized Metrics
         </h3>
         <p className="text-text-faint text-xs font-[family-name:var(--font-mono)] mb-6 max-w-2xl">
-          Pearson correlation coefficient between human preference (BT score) and automated pipeline metrics
+          All metrics normalized to 0–100 scale. TTFB is inverted (higher = faster).
+        </p>
+
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+              barCategoryGap="20%"
+              barGap={3}
+            >
+              <CartesianGrid vertical={false} stroke="#1C1E2E" />
+              <XAxis
+                dataKey="provider"
+                tick={{ fill: '#888899', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                axisLine={{ stroke: '#1C1E2E' }}
+                tickLine={false}
+              />
+              <YAxis
+                domain={[0, 100]}
+                tickFormatter={(v: number) => `${v}`}
+                tick={{ fill: '#4E4E5E', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                content={<CustomTooltip />}
+                cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+              />
+              <Legend
+                wrapperStyle={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}
+              />
+              <Bar dataKey="Prosody" fill={COMPARISON_METRIC_COLORS['Prosody']} radius={[4, 4, 0, 0]} animationDuration={1000} />
+              <Bar dataKey="NISQA" fill={COMPARISON_METRIC_COLORS['NISQA']} radius={[4, 4, 0, 0]} animationDuration={1000} animationBegin={100} />
+              <Bar dataKey="DNSMOS" fill={COMPARISON_METRIC_COLORS['DNSMOS']} radius={[4, 4, 0, 0]} animationDuration={1000} animationBegin={200} />
+              <Bar dataKey="TTFB (inv)" fill={COMPARISON_METRIC_COLORS['TTFB (inv)']} radius={[4, 4, 0, 0]} animationDuration={1000} animationBegin={300} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </motion.div>
+
+      {/* Provider Stats Table */}
+      <motion.div
+        variants={slideUp}
+        initial="hidden"
+        animate="visible"
+        className="bg-bg-surface rounded-xl border border-border-default p-6"
+      >
+        <h3 className="font-[family-name:var(--font-display)] text-lg text-text-primary mb-1">
+          Provider Aggregate Statistics
+        </h3>
+        <p className="text-text-faint text-xs font-[family-name:var(--font-mono)] mb-6">
+          Raw metric values across all providers
         </p>
 
         <div className="overflow-x-auto">
@@ -400,46 +526,69 @@ function MetricCorrelationsTab() {
             <thead>
               <tr className="border-b border-border-default">
                 <th className="text-left py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
-                  Metric
+                  Provider
                 </th>
-                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium w-24">
-                  Pearson r
+                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
+                  Models
                 </th>
-                <th className="text-left py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
-                  Strength
+                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
+                  Battles
+                </th>
+                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
+                  Avg Elo
+                </th>
+                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
+                  Win Rate
+                </th>
+                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
+                  TTFB (ms)
+                </th>
+                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
+                  Prosody
+                </th>
+                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
+                  NISQA
+                </th>
+                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
+                  DNSMOS
                 </th>
               </tr>
             </thead>
             <tbody>
-              {metricCorrelations.map((row, idx) => (
+              {providers.map((p, idx) => (
                 <motion.tr
-                  key={row.metric}
+                  key={p.provider}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.4, delay: idx * 0.07 }}
                   className="border-b border-border-default/50 last:border-0"
                 >
-                  <td className="py-3.5 px-3">
-                    <div className="flex flex-col">
-                      <span className="text-text-primary font-medium">{row.metric}</span>
-                      <span className="text-text-faint text-xs">{row.label}</span>
-                    </div>
+                  <td className="py-3.5 px-3 text-text-primary font-medium whitespace-nowrap">
+                    {p.provider}
                   </td>
-                  <td className={`py-3.5 px-3 text-right font-[family-name:var(--font-mono)] font-medium ${correlationColor(row.pearson)}`}>
-                    {row.pearson.toFixed(2)}
+                  <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-text-body">
+                    {p.model_count}
                   </td>
-                  <td className="py-3.5 px-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2.5 bg-bg-hover rounded-full overflow-hidden max-w-[200px]">
-                        <motion.div
-                          className="h-full rounded-full"
-                          style={{ backgroundColor: correlationBarColor(row.pearson) }}
-                          initial={{ width: 0 }}
-                          animate={{ width: `${row.pearson * 100}%` }}
-                          transition={{ duration: 0.8, delay: idx * 0.07 + 0.2, ease: 'easeOut' }}
-                        />
-                      </div>
-                    </div>
+                  <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-text-body">
+                    {p.total_battles.toLocaleString()}
+                  </td>
+                  <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-text-body">
+                    {p.avg_elo.toFixed(1)}
+                  </td>
+                  <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-text-body">
+                    {(p.avg_win_rate * 100).toFixed(1)}%
+                  </td>
+                  <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-text-body">
+                    {p.avg_ttfb.toFixed(0)}
+                  </td>
+                  <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-accent">
+                    {p.avg_prosody.toFixed(3)}
+                  </td>
+                  <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-text-body">
+                    {p.avg_nisqa.toFixed(3)}
+                  </td>
+                  <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-text-body">
+                    {p.avg_dnsmos.toFixed(3)}
                   </td>
                 </motion.tr>
               ))}
@@ -462,9 +611,8 @@ function MetricCorrelationsTab() {
           </span>
         </div>
         <p className="text-text-body text-sm leading-relaxed italic">
-          Neural MOS metrics (UTMOS, NISQA) correlate better with human preference
-          than acoustic metrics (WER, SECS) — suggesting perceptual quality dominates
-          functional accuracy in user preference.
+          Provider-level aggregates reveal how quality and latency trade off across vendors.
+          Normalized metrics allow direct visual comparison across different measurement scales.
         </p>
       </motion.div>
     </motion.div>
@@ -733,7 +881,7 @@ export default function AnalyticsPage() {
       case 'votes':
         return <VoteAnalyticsTab apiSummary={apiSummary} activeMode={activeMode} />
       case 'correlations':
-        return <MetricCorrelationsTab />
+        return <ProviderComparisonTab activeMode={activeMode} />
       case 'fairness':
         return <FairnessTab />
       case 'papers':

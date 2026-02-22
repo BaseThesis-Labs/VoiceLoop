@@ -134,6 +134,18 @@ export interface AnalyticsSummary {
   total_scenarios: number;
 }
 
+export interface ProviderComparison {
+  provider: string;
+  model_count: number;
+  total_battles: number;
+  avg_elo: number;
+  avg_win_rate: number;
+  avg_ttfb: number;
+  avg_prosody: number;
+  avg_nisqa: number;
+  avg_dnsmos: number;
+}
+
 export interface PromptItem {
   id: string;
   text: string;
@@ -520,6 +532,8 @@ export const api = {
   analytics: {
     summary: () => request<AnalyticsSummary>('/analytics/summary'),
     correlations: () => request<{ count: number; metrics: Record<string, unknown>[] }>('/analytics/correlations'),
+    providerComparison: (battleType: string = 'tts') =>
+      request<ProviderComparison[]>(`/analytics/provider-comparison?battle_type=${battleType}`),
     voteDistribution: (battleType: string = 'tts') =>
       request<Record<string, number>>(`/analytics/vote-distribution?battle_type=${battleType}`),
     battleHistory: (params?: {
