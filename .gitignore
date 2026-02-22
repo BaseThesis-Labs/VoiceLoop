@@ -19,6 +19,9 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Worktrees
+.worktrees/
+
 # Environment
 .env
 .env.local
