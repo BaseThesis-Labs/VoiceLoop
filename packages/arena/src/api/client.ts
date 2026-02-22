@@ -140,10 +140,10 @@ export interface ProviderComparison {
   total_battles: number;
   avg_elo: number;
   avg_win_rate: number;
-  avg_ttfb: number;
-  avg_prosody: number;
-  avg_nisqa: number;
-  avg_dnsmos: number;
+  avg_ttfb: number | null;
+  avg_prosody: number | null;
+  avg_nisqa: number | null;
+  avg_dnsmos: number | null;
 }
 
 export interface MetricDistribution {

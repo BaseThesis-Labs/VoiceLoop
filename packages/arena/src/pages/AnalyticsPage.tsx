@@ -301,13 +301,13 @@ const COMPARISON_METRIC_COLORS: Record<string, string> = {
 }
 
 function normalizeProviderMetrics(providers: ProviderComparison[]) {
-  const maxTtfb = Math.max(...providers.map((p) => p.avg_ttfb), 1)
+  const maxTtfb = Math.max(...providers.map((p) => p.avg_ttfb ?? 0), 1)
   return providers.map((p) => ({
     provider: p.provider,
-    Prosody: Math.round(p.avg_prosody * 100),
-    NISQA: Math.round(((p.avg_nisqa - 1) / 4) * 100),
-    DNSMOS: Math.round(((p.avg_dnsmos - 1) / 4) * 100),
-    'TTFB (inv)': Math.round(Math.max(0, (1 - p.avg_ttfb / maxTtfb) * 100)),
+    Prosody: p.avg_prosody != null ? Math.round(p.avg_prosody * 100) : 0,
+    NISQA: p.avg_nisqa != null ? Math.round(((p.avg_nisqa - 1) / 4) * 100) : 0,
+    DNSMOS: p.avg_dnsmos != null ? Math.round(((p.avg_dnsmos - 1) / 4) * 100) : 0,
+    'TTFB (inv)': p.avg_ttfb != null ? Math.round(Math.max(0, (1 - p.avg_ttfb / maxTtfb) * 100)) : 0,
   }))
 }
 
@@ -491,25 +491,25 @@ function ProviderComparisonTab({ activeMode }: { activeMode: string }) {
                     {p.model_count}
                   </td>
                   <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-text-body">
-                    {p.total_battles.toLocaleString()}
+                    {(p.total_battles ?? 0).toLocaleString()}
                   </td>
                   <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-text-body">
-                    {p.avg_elo.toFixed(1)}
+                    {(p.avg_elo ?? 0).toFixed(1)}
                   </td>
                   <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-text-body">
-                    {(p.avg_win_rate * 100).toFixed(1)}%
+                    {((p.avg_win_rate ?? 0) * 100).toFixed(1)}%
                   </td>
                   <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-text-body">
-                    {p.avg_ttfb.toFixed(0)}
+                    {p.avg_ttfb != null ? p.avg_ttfb.toFixed(0) : '—'}
                   </td>
                   <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-accent">
-                    {p.avg_prosody.toFixed(3)}
+                    {p.avg_prosody != null ? p.avg_prosody.toFixed(3) : '—'}
                   </td>
                   <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-text-body">
-                    {p.avg_nisqa.toFixed(3)}
+                    {p.avg_nisqa != null ? p.avg_nisqa.toFixed(3) : '—'}
                   </td>
                   <td className="py-3.5 px-3 text-right font-[family-name:var(--font-mono)] text-text-body">
-                    {p.avg_dnsmos.toFixed(3)}
+                    {p.avg_dnsmos != null ? p.avg_dnsmos.toFixed(3) : '—'}
                   </td>
                 </motion.tr>
               ))}
