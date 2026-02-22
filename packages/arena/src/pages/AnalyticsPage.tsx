@@ -21,6 +21,7 @@ import {
 } from 'recharts'
 import { arenaStats as mockArenaStats, metricCorrelations, fairnessData } from '../data/mockData'
 import { api, type AnalyticsSummary } from '../api/client'
+import { ModeSelector, getStoredMode, type BattleMode } from '../components/ModeSelector'
 
 // ============================================================
 // Types
@@ -43,13 +44,6 @@ const TABS: TabDef[] = [
   { id: 'fairness', label: 'Fairness' },
   { id: 'papers', label: 'Papers' },
   { id: 'dataset', label: 'Dataset' },
-]
-
-const voteDistribution = [
-  { outcome: 'A Wins', pct: 42, fill: '#6366f1' },
-  { outcome: 'B Wins', pct: 38, fill: '#f59e0b' },
-  { outcome: 'Tie', pct: 15, fill: '#888899' },
-  { outcome: 'Both Bad', pct: 5, fill: '#ef4444' },
 ]
 
 const ACCENT_COLORS: Record<string, string> = {
@@ -215,7 +209,23 @@ function CustomTooltipWer({
 // Tab Content Components
 // ============================================================
 
-function VoteAnalyticsTab({ apiSummary }: { apiSummary: AnalyticsSummary | null }) {
+function VoteAnalyticsTab({ apiSummary, activeMode }: { apiSummary: AnalyticsSummary | null; activeMode: string }) {
+  const [voteData, setVoteData] = useState<{ outcome: string; pct: number; fill: string }[]>([])
+
+  useEffect(() => {
+    api.analytics.voteDistribution(activeMode).then((data) => {
+      const total = data.total || 1
+      const chartData: { outcome: string; pct: number; fill: string }[] = []
+      if (data.a) chartData.push({ outcome: 'A Wins', pct: Math.round(((data.a || 0) / total) * 100), fill: '#6366f1' })
+      if (data.b) chartData.push({ outcome: 'B Wins', pct: Math.round(((data.b || 0) / total) * 100), fill: '#f59e0b' })
+      if (data.c) chartData.push({ outcome: 'C Wins', pct: Math.round(((data.c || 0) / total) * 100), fill: '#14b8a6' })
+      if (data.d) chartData.push({ outcome: 'D Wins', pct: Math.round(((data.d || 0) / total) * 100), fill: '#a855f7' })
+      if (data.tie) chartData.push({ outcome: 'Tie', pct: Math.round(((data.tie || 0) / total) * 100), fill: '#888899' })
+      if (data.all_bad) chartData.push({ outcome: 'Both Bad', pct: Math.round(((data.all_bad || 0) / total) * 100), fill: '#ef4444' })
+      setVoteData(chartData)
+    }).catch(() => {})
+  }, [activeMode])
+
   const stats = apiSummary
     ? [
         { label: 'Total Battles', value: apiSummary.total_battles.toLocaleString(), icon: Vote },
@@ -282,7 +292,7 @@ function VoteAnalyticsTab({ apiSummary }: { apiSummary: AnalyticsSummary | null 
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
-              data={voteDistribution}
+              data={voteData}
               layout="vertical"
               margin={{ top: 0, right: 30, left: 10, bottom: 0 }}
               barCategoryGap="25%"
@@ -314,7 +324,7 @@ function VoteAnalyticsTab({ apiSummary }: { apiSummary: AnalyticsSummary | null 
                 animationDuration={1200}
                 animationEasing="ease-out"
               >
-                {voteDistribution.map((entry) => (
+                {voteData.map((entry) => (
                   <motion.rect key={entry.outcome} fill={entry.fill} />
                 ))}
               </Bar>
@@ -324,7 +334,7 @@ function VoteAnalyticsTab({ apiSummary }: { apiSummary: AnalyticsSummary | null 
 
         {/* Legend */}
         <div className="flex flex-wrap gap-5 mt-4 pt-4 border-t border-border-default">
-          {voteDistribution.map((entry) => (
+          {voteData.map((entry) => (
             <div key={entry.outcome} className="flex items-center gap-2">
               <span
                 className="h-2.5 w-2.5 rounded-full"
@@ -658,7 +668,10 @@ function PapersTab() {
   )
 }
 
-function DatasetTab() {
+function DatasetTab({ activeMode }: { activeMode: string }) {
+  const exportCsvUrl = api.analytics.exportUrl({ battle_type: activeMode, format: 'csv' })
+  const exportJsonUrl = api.analytics.exportUrl({ battle_type: activeMode, format: 'json' })
+
   return (
     <motion.div
       key="dataset"
@@ -672,18 +685,29 @@ function DatasetTab() {
           <Download className="h-7 w-7 text-accent" />
         </div>
         <h3 className="font-[family-name:var(--font-display)] text-2xl text-text-primary mb-3">
-          Dataset Download
+          Export Battle Data
         </h3>
         <p className="text-text-body text-sm max-w-md leading-relaxed mb-6">
-          KoeCode Arena dataset (CC-BY-4.0) — Coming with Phase 3 launch
+          Download battle data for the selected mode as CSV or JSON
         </p>
-        <button
-          disabled
-          className="inline-flex items-center gap-2 bg-bg-hover border border-border-default text-text-faint font-[family-name:var(--font-mono)] text-sm px-6 py-3 rounded-lg cursor-not-allowed opacity-50"
-        >
-          <Download className="h-4 w-4" />
-          Download Dataset (.tar.gz)
-        </button>
+        <div className="flex gap-3">
+          <a
+            href={exportCsvUrl}
+            download
+            className="inline-flex items-center gap-2 bg-accent/10 border border-accent/20 text-accent font-[family-name:var(--font-mono)] text-sm px-6 py-3 rounded-lg hover:bg-accent/20 transition-colors"
+          >
+            <Download className="h-4 w-4" />
+            Download CSV
+          </a>
+          <a
+            href={exportJsonUrl}
+            download
+            className="inline-flex items-center gap-2 bg-bg-hover border border-border-default text-text-body font-[family-name:var(--font-mono)] text-sm px-6 py-3 rounded-lg hover:bg-bg-surface transition-colors"
+          >
+            <Download className="h-4 w-4" />
+            Download JSON
+          </a>
+        </div>
       </div>
     </motion.div>
   )
@@ -696,6 +720,7 @@ function DatasetTab() {
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<TabId>('votes')
   const [apiSummary, setApiSummary] = useState<AnalyticsSummary | null>(null)
+  const [activeMode, setActiveMode] = useState<BattleMode>(getStoredMode)
 
   useEffect(() => {
     api.analytics.summary().then(setApiSummary).catch(() => {
@@ -706,7 +731,7 @@ export default function AnalyticsPage() {
   function renderTab() {
     switch (activeTab) {
       case 'votes':
-        return <VoteAnalyticsTab apiSummary={apiSummary} />
+        return <VoteAnalyticsTab apiSummary={apiSummary} activeMode={activeMode} />
       case 'correlations':
         return <MetricCorrelationsTab />
       case 'fairness':
@@ -714,7 +739,7 @@ export default function AnalyticsPage() {
       case 'papers':
         return <PapersTab />
       case 'dataset':
-        return <DatasetTab />
+        return <DatasetTab activeMode={activeMode} />
     }
   }
 
@@ -737,6 +762,13 @@ export default function AnalyticsPage() {
             Public analytics for the voice AI research community
           </p>
         </motion.div>
+
+        {/* ---------------------------------------------------------- */}
+        {/* Mode Selector                                               */}
+        {/* ---------------------------------------------------------- */}
+        <div className="mb-8">
+          <ModeSelector active={activeMode} onChange={setActiveMode} />
+        </div>
 
         {/* ---------------------------------------------------------- */}
         {/* Tab Navigation                                              */}

@@ -493,6 +493,27 @@ export const api = {
   analytics: {
     summary: () => request<AnalyticsSummary>('/analytics/summary'),
     correlations: () => request<{ count: number; metrics: Record<string, unknown>[] }>('/analytics/correlations'),
+    voteDistribution: (battleType: string = 'tts') =>
+      request<Record<string, number>>(`/analytics/vote-distribution?battle_type=${battleType}`),
+    battleHistory: (params?: {
+      battle_type?: string;
+      model_id?: string;
+      limit?: number;
+      offset?: number;
+    }) => {
+      const qs = new URLSearchParams(
+        Object.entries(params || {}).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])
+      ).toString();
+      return request<Record<string, unknown>[]>(`/analytics/battles${qs ? `?${qs}` : ''}`);
+    },
+    modelBreakdown: (modelId: string, battleType: string = 'tts') =>
+      request<Record<string, unknown>>(`/analytics/model-breakdown/${modelId}?battle_type=${battleType}`),
+    exportUrl: (params?: { battle_type?: string; format?: string }) => {
+      const qs = new URLSearchParams(
+        Object.entries(params || {}).filter(([, v]) => v != null) as [string, string][]
+      ).toString();
+      return `/api/v1/analytics/export${qs ? `?${qs}` : ''}`;
+    },
   },
 };
 
