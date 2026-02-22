@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { Link } from 'react-router-dom'
-import { api, type LeaderboardEntry } from '../api/client'
+import { api, type LeaderboardEntry, type MetricConfig, type LeaderboardResponse } from '../api/client'
 import { ModeSelector, getStoredMode, type BattleMode } from '../components/ModeSelector'
 
 // ---------------------------------------------------------------------------
@@ -36,6 +36,21 @@ function normalize(
   return invert ? 100 - norm : norm
 }
 
+function formatMetric(val: number, format: string): string {
+  switch (format) {
+    case 'ms':
+      return `${val.toFixed(0)}ms`
+    case 'decimal_2':
+      return val.toFixed(2)
+    case 'percent':
+      return `${(val * 100).toFixed(1)}%`
+    case 'score_5':
+      return (val * 5).toFixed(2)
+    default:
+      return val.toFixed(2)
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Radar chart data builder
 // ---------------------------------------------------------------------------
@@ -55,63 +70,36 @@ interface RadarDimension {
 function buildRadarData(
   topEntries: LeaderboardEntry[],
   allEntries: LeaderboardEntry[],
+  metricsConfig: MetricConfig[],
 ): RadarDimension[] {
-  // Need at least some entries with metrics
-  const withMetrics = allEntries.filter(
-    (e) => e.avg_quality != null || e.avg_prosody != null || e.avg_wer != null,
-  )
-  if (withMetrics.length === 0) return []
+  if (allEntries.length === 0) return []
 
-  const dims = [
-    {
-      dimension: 'ELO Rating',
-      key: 'elo_rating' as const,
-      invert: false,
-    },
-    {
-      dimension: 'Win Rate',
-      key: 'win_rate' as const,
-      invert: false,
-    },
-    {
-      dimension: 'Prosody',
-      key: 'avg_prosody' as const,
-      invert: false,
-    },
-    {
-      dimension: 'Quality',
-      key: 'avg_quality' as const,
-      invert: false,
-    },
-    {
-      dimension: 'Accuracy',
-      key: 'avg_wer' as const,
-      invert: true,
-    },
-    {
-      dimension: 'Similarity',
-      key: 'avg_semascore' as const,
-      invert: false,
-    },
+  const dims: { dimension: string; key: string; invert: boolean; fromMetrics: boolean }[] = [
+    { dimension: 'ELO Rating', key: 'elo_rating', invert: false, fromMetrics: false },
+    { dimension: 'Win Rate', key: 'win_rate', invert: false, fromMetrics: false },
+    ...metricsConfig.map((mc) => ({
+      dimension: mc.label,
+      key: mc.key,
+      invert: !mc.higher_is_better,
+      fromMetrics: true,
+    })),
   ]
 
   return dims.map((d) => {
     const vals = allEntries
-      .map((e) => e[d.key] as number | null)
+      .map((e) => d.fromMetrics ? e.metrics[d.key] : (e as Record<string, unknown>)[d.key] as number | null)
       .filter((v): v is number => v != null)
     if (vals.length === 0) {
       const row: RadarDimension = { dimension: d.dimension, fullMark: 100 }
-      topEntries.forEach((_, i) => {
-        row[`model${i}`] = 50
-      })
+      topEntries.forEach((_, i) => { row[`model${i}`] = 50 })
       return row
     }
     const min = Math.min(...vals)
     const max = Math.max(...vals)
     const row: RadarDimension = { dimension: d.dimension, fullMark: 100 }
     topEntries.forEach((e, i) => {
-      const raw = (e[d.key] as number | null) ?? (d.invert ? max : min)
-      row[`model${i}`] = Math.round(normalize(raw, min, max, d.invert))
+      const raw = (d.fromMetrics ? e.metrics[d.key] : (e as Record<string, unknown>)[d.key] as number | null) ?? (d.invert ? max : min)
+      row[`model${i}`] = Math.round(normalize(raw as number, min, max, d.invert))
     })
     return row
   })
@@ -125,7 +113,7 @@ function buildRadarData(
 // Leaderboard Table
 // ---------------------------------------------------------------------------
 
-function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
+function LeaderboardTable({ entries, metricsConfig }: { entries: LeaderboardEntry[]; metricsConfig: MetricConfig[] }) {
   const maxElo = Math.max(...entries.map((e) => e.elo_rating))
 
   return (
@@ -140,8 +128,11 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
               <th className="text-left px-3 py-3">ELO Rating</th>
               <th className="text-right px-3 py-3">Battles</th>
               <th className="text-right px-3 py-3">Win Rate</th>
-              <th className="text-right px-3 py-3">Prosody</th>
-              <th className="text-right px-3 pr-5 py-3">Quality</th>
+              {metricsConfig.map((mc, i) => (
+                <th key={mc.key} className={`text-right px-3 py-3 ${i === metricsConfig.length - 1 ? 'pr-5' : ''}`}>
+                  {mc.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -231,19 +222,20 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
                       </div>
                     </td>
 
-                    {/* Prosody */}
-                    <td className="px-3 py-3 text-right text-sm font-[family-name:var(--font-mono)] text-text-body">
-                      {entry.avg_prosody != null
-                        ? entry.avg_prosody.toFixed(2)
-                        : '—'}
-                    </td>
-
-                    {/* Quality */}
-                    <td className="px-3 pr-5 py-3 text-right text-sm font-[family-name:var(--font-mono)] text-text-body">
-                      {entry.avg_quality != null
-                        ? (entry.avg_quality * 5).toFixed(2)
-                        : '—'}
-                    </td>
+                    {/* Dynamic metric columns */}
+                    {metricsConfig.map((mc, i) => {
+                      const val = entry.metrics[mc.key]
+                      return (
+                        <td
+                          key={mc.key}
+                          className={`px-3 py-3 text-right text-sm font-[family-name:var(--font-mono)] text-text-body ${
+                            i === metricsConfig.length - 1 ? 'pr-5' : ''
+                          }`}
+                        >
+                          {val != null ? formatMetric(val, mc.format) : '—'}
+                        </td>
+                      )
+                    })}
                   </motion.tr>
                 )
               })}
@@ -261,11 +253,13 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
 function RadarComparison({
   topEntries,
   allEntries,
+  metricsConfig,
 }: {
   topEntries: LeaderboardEntry[]
   allEntries: LeaderboardEntry[]
+  metricsConfig: MetricConfig[]
 }) {
-  const data = buildRadarData(topEntries, allEntries)
+  const data = buildRadarData(topEntries, allEntries, metricsConfig)
 
   if (data.length === 0) return null
 
@@ -343,6 +337,7 @@ function RadarComparison({
 export default function LeaderboardPage() {
   const [activeMode, setActiveMode] = useState<BattleMode>(getStoredMode)
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
+  const [metricsConfig, setMetricsConfig] = useState<MetricConfig[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -350,7 +345,8 @@ export default function LeaderboardPage() {
     api.leaderboard
       .current(activeMode)
       .then((data) => {
-        setEntries(data)
+        setEntries(data.entries)
+        setMetricsConfig(data.metrics_config)
       })
       .catch(() => {
         // API unavailable — show empty state
@@ -414,7 +410,7 @@ export default function LeaderboardPage() {
               </p>
             </div>
           ) : (
-            <LeaderboardTable entries={entries} />
+            <LeaderboardTable entries={entries} metricsConfig={metricsConfig} />
           )}
         </motion.div>
 
@@ -424,6 +420,7 @@ export default function LeaderboardPage() {
             <RadarComparison
               topEntries={radarEntries}
               allEntries={entries}
+              metricsConfig={metricsConfig}
             />
           </div>
         )}

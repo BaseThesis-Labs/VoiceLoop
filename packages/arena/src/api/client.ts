@@ -75,18 +75,28 @@ export interface Battle {
   created_at: string;
 }
 
+export interface MetricConfig {
+  key: string;
+  label: string;
+  format: string;
+  higher_is_better: boolean;
+}
+
 export interface LeaderboardEntry {
   model_id: string;
   model_name: string;
   provider: string;
+  model_type: string;
   elo_rating: number;
   win_rate: number;
   total_battles: number;
-  avg_wer: number | null;
-  avg_semascore: number | null;
-  avg_prosody: number | null;
-  avg_quality: number | null;
   rank: number;
+  metrics: Record<string, number | null>;
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  metrics_config: MetricConfig[];
 }
 
 export interface AnalyticsSummary {
@@ -473,7 +483,7 @@ export const api = {
 
   leaderboard: {
     current: (battleType: string = 'tts') =>
-      request<LeaderboardEntry[]>(`/leaderboard?battle_type=${battleType}`),
+      request<LeaderboardResponse>(`/leaderboard?battle_type=${battleType}`),
     history: (modelId?: string) =>
       request<{ model_id: string; model_name: string; elo_rating: number; snapshot_date: string }[]>(
         `/leaderboard/history${modelId ? `?model_id=${modelId}` : ''}`
