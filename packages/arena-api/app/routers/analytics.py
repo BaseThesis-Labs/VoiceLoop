@@ -333,6 +333,53 @@ async def export_data(
         )
         models_map = {m.id: m for m in models_result.scalars().all()}
 
+    # Batch load evaluations
+    eval_ids_set: set[str] = set()
+    for b in battles:
+        for eid in [b.eval_a_id, b.eval_b_id, b.eval_c_id, b.eval_d_id]:
+            if eid:
+                eval_ids_set.add(eid)
+
+    evals_map: dict[str, Evaluation] = {}
+    if eval_ids_set:
+        evals_result = await db.execute(
+            select(Evaluation).where(Evaluation.id.in_(list(eval_ids_set)))
+        )
+        evals_map = {e.id: e for e in evals_result.scalars().all()}
+
+    # Metric extraction helpers
+    _DIRECT_COLS = [
+        ("ttfb_ms", "ttfb"),
+        ("e2e_latency_ms", "e2e_latency"),
+        ("generation_time_ms", "generation_time"),
+        ("duration_seconds", "duration"),
+    ]
+    _JSON_KEYS = [
+        ("prosody_score", "prosody"),
+        ("utmos", "utmos"),
+        ("nisqa_overall", "nisqa"),
+        ("dnsmos_overall", "dnsmos"),
+        ("semascore", "semascore"),
+        ("wer_score", "wer"),
+        ("snr_db", "snr_db"),
+        ("pace_score", "pace_score"),
+        ("monotone_score", "monotone"),
+        ("intonation_score", "intonation"),
+    ]
+
+    def _extract_eval_columns(ev: Evaluation | None, label: str) -> dict:
+        """Return flattened metric columns for a single evaluation slot."""
+        cols: dict = {}
+        for attr, prefix in _DIRECT_COLS:
+            cols[f"{prefix}_{label}"] = getattr(ev, attr, None) if ev else ""
+            if cols[f"{prefix}_{label}"] is None:
+                cols[f"{prefix}_{label}"] = ""
+        mj = (ev.metrics_json or {}) if ev else {}
+        for json_key, prefix in _JSON_KEYS:
+            val = mj.get(json_key)
+            cols[f"{prefix}_{label}"] = val if val is not None else ""
+        return cols
+
     # Build rows
     rows = []
     for b in battles:
@@ -350,6 +397,13 @@ async def export_data(
             m = models_map.get(mid) if mid else None
             row[f"model_{label}_name"] = m.name if m else ""
             row[f"model_{label}_provider"] = m.provider if m else ""
+
+        # Per-model evaluation metrics
+        for label in ["a", "b", "c", "d"]:
+            eid = getattr(b, f"eval_{label}_id")
+            ev = evals_map.get(eid) if eid else None
+            row.update(_extract_eval_columns(ev, label))
+
         rows.append(row)
 
     if export_format == "csv":
