@@ -1,18 +1,28 @@
 from pydantic import BaseModel
 
 
+class MetricConfig(BaseModel):
+    key: str           # "avg_prosody", "avg_wer", etc.
+    label: str         # "Prosody", "WER", etc.
+    format: str        # "decimal_2", "percent", "ms", "score_5"
+    higher_is_better: bool = True
+
+
 class LeaderboardEntry(BaseModel):
     model_id: str
     model_name: str
     provider: str
+    model_type: str
     elo_rating: float
     win_rate: float
     total_battles: int
-    avg_wer: float | None
-    avg_semascore: float | None
-    avg_prosody: float | None
-    avg_quality: float | None
     rank: int
+    metrics: dict[str, float | None] = {}
+
+
+class LeaderboardResponse(BaseModel):
+    entries: list[LeaderboardEntry]
+    metrics_config: list[MetricConfig]
 
 
 class LeaderboardHistoryEntry(BaseModel):
