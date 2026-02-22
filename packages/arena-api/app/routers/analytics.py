@@ -385,6 +385,106 @@ async def get_provider_comparison(
     return result
 
 
+@router.get("/metric-distribution")
+async def get_metric_distribution(
+    metric: str = Query(..., description="Metric key to build histogram for"),
+    battle_type: str = "tts",
+    bins: int = Query(default=20, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return histogram data for a given metric across all completed evaluations."""
+
+    DIRECT_COLUMNS = {"ttfb_ms", "e2e_latency_ms", "duration_seconds"}
+    JSON_METRICS = {
+        "prosody_score", "nisqa_overall", "dnsmos_overall",
+        "utmos", "wer_score", "snr_db",
+    }
+    SUPPORTED_METRICS = DIRECT_COLUMNS | JSON_METRICS
+
+    if metric not in SUPPORTED_METRICS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported metric '{metric}'. Supported: {sorted(SUPPORTED_METRICS)}",
+        )
+
+    # Query completed evaluations filtered by battle_type via model_type
+    stmt = (
+        select(Evaluation)
+        .join(VoiceModel, Evaluation.model_id == VoiceModel.id)
+        .where(
+            Evaluation.status == "completed",
+            VoiceModel.model_type == battle_type,
+        )
+    )
+    result = await db.execute(stmt)
+    evaluations = result.scalars().all()
+
+    # Extract metric values, skipping None
+    values: list[float] = []
+    if metric in DIRECT_COLUMNS:
+        for ev in evaluations:
+            val = getattr(ev, metric, None)
+            if val is not None:
+                values.append(float(val))
+    else:
+        for ev in evaluations:
+            mj = ev.metrics_json or {}
+            val = mj.get(metric)
+            if val is not None:
+                values.append(float(val))
+
+    # Return early if no data
+    if not values:
+        return {
+            "metric": metric,
+            "total_values": 0,
+            "bins": [],
+        }
+
+    # Compute histogram bins
+    min_val = min(values)
+    max_val = max(values)
+
+    # Handle case where all values are identical
+    if min_val == max_val:
+        return {
+            "metric": metric,
+            "total_values": len(values),
+            "bins": [
+                {
+                    "bin_start": min_val,
+                    "bin_end": max_val,
+                    "count": len(values),
+                }
+            ],
+        }
+
+    bin_width = (max_val - min_val) / bins
+    histogram = []
+    for i in range(bins):
+        bin_start = min_val + i * bin_width
+        bin_end = min_val + (i + 1) * bin_width
+        histogram.append({
+            "bin_start": round(bin_start, 6),
+            "bin_end": round(bin_end, 6),
+            "count": 0,
+        })
+
+    # Count values into bins
+    for v in values:
+        idx = int((v - min_val) / bin_width)
+        # Clamp to last bin for the max value
+        if idx >= bins:
+            idx = bins - 1
+        histogram[idx]["count"] += 1
+
+    return {
+        "metric": metric,
+        "total_values": len(values),
+        "bins": histogram,
+    }
+
+
 def _sanitize_csv_value(value: str) -> str:
     """Prevent CSV injection by escaping formula-triggering characters."""
     if value and value[0] in ("=", "+", "-", "@", "\t", "\r"):
