@@ -21,14 +21,14 @@ import {
   CartesianGrid,
 } from 'recharts'
 import { arenaStats as mockArenaStats, metricCorrelations, fairnessData } from '../data/mockData'
-import { api, type AnalyticsSummary, type ProviderComparison } from '../api/client'
+import { api, type AnalyticsSummary, type ProviderComparison, type MetricDistribution } from '../api/client'
 import { ModeSelector, getStoredMode, type BattleMode } from '../components/ModeSelector'
 
 // ============================================================
 // Types
 // ============================================================
 
-type TabId = 'votes' | 'correlations' | 'fairness' | 'papers' | 'dataset'
+type TabId = 'votes' | 'correlations' | 'metricExplorer' | 'papers' | 'dataset'
 
 interface TabDef {
   id: TabId
@@ -42,7 +42,7 @@ interface TabDef {
 const TABS: TabDef[] = [
   { id: 'votes', label: 'Vote Analytics' },
   { id: 'correlations', label: 'Provider Comparison' },
-  { id: 'fairness', label: 'Fairness' },
+  { id: 'metricExplorer', label: 'Metric Explorer' },
   { id: 'papers', label: 'Papers' },
   { id: 'dataset', label: 'Dataset' },
 ]
@@ -619,108 +619,227 @@ function ProviderComparisonTab({ activeMode }: { activeMode: string }) {
   )
 }
 
-function FairnessTab() {
+const METRIC_OPTIONS: { value: string; label: string }[] = [
+  { value: 'prosody_score', label: 'Prosody Score' },
+  { value: 'nisqa_overall', label: 'NISQA Overall' },
+  { value: 'dnsmos_overall', label: 'DNSMOS Overall' },
+  { value: 'utmos', label: 'UTMOS' },
+  { value: 'wer_score', label: 'Word Error Rate' },
+  { value: 'ttfb_ms', label: 'Time to First Byte (ms)' },
+  { value: 'duration_seconds', label: 'Duration (s)' },
+  { value: 'snr_db', label: 'Signal-to-Noise Ratio (dB)' },
+]
+
+function computeSummaryStats(bins: MetricDistribution['bins'], totalValues: number) {
+  if (bins.length === 0 || totalValues === 0) {
+    return { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 }
+  }
+
+  // Min: first non-empty bin start
+  const nonEmptyBins = bins.filter((b) => b.count > 0)
+  const min = nonEmptyBins.length > 0 ? nonEmptyBins[0].bin_start : bins[0].bin_start
+  // Max: last non-empty bin end
+  const max = nonEmptyBins.length > 0 ? nonEmptyBins[nonEmptyBins.length - 1].bin_end : bins[bins.length - 1].bin_end
+
+  // Mean: weighted average of midpoints
+  let weightedSum = 0
+  for (const b of bins) {
+    const midpoint = (b.bin_start + b.bin_end) / 2
+    weightedSum += midpoint * b.count
+  }
+  const mean = weightedSum / totalValues
+
+  // Median: find bin where cumulative count crosses total/2
+  const halfTotal = totalValues / 2
+  let cumulative = 0
+  let median = mean // fallback
+  for (const b of bins) {
+    cumulative += b.count
+    if (cumulative >= halfTotal) {
+      // Linear interpolation within the median bin
+      const prevCumulative = cumulative - b.count
+      const fraction = b.count > 0 ? (halfTotal - prevCumulative) / b.count : 0.5
+      median = b.bin_start + fraction * (b.bin_end - b.bin_start)
+      break
+    }
+  }
+
+  // Std dev: sqrt(sum(count * (midpoint - mean)^2) / total)
+  let varianceSum = 0
+  for (const b of bins) {
+    const midpoint = (b.bin_start + b.bin_end) / 2
+    varianceSum += b.count * (midpoint - mean) ** 2
+  }
+  const stdDev = Math.sqrt(varianceSum / totalValues)
+
+  return { min, max, mean, median, stdDev }
+}
+
+function formatBinRange(binStart: number, binEnd: number): string {
+  // Use reasonable precision based on range magnitude
+  const range = binEnd - binStart
+  const decimals = range < 0.01 ? 4 : range < 0.1 ? 3 : range < 1 ? 2 : range < 10 ? 1 : 0
+  return `${binStart.toFixed(decimals)}-${binEnd.toFixed(decimals)}`
+}
+
+function formatStatValue(value: number): string {
+  if (Math.abs(value) >= 100) return value.toFixed(1)
+  if (Math.abs(value) >= 1) return value.toFixed(2)
+  return value.toFixed(4)
+}
+
+function MetricExplorerTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: Array<{ value: number; name?: string; payload?: Record<string, unknown>; fill?: string; color?: string }>
+  label?: string
+}) {
+  if (!active || !payload || payload.length === 0) return null
+  return (
+    <div className="bg-bg-surface border border-border-default rounded-lg px-4 py-3 shadow-xl">
+      <p className="text-text-faint text-xs font-[family-name:var(--font-mono)] uppercase tracking-wider mb-1.5">
+        {label}
+      </p>
+      {payload.map((entry, i) => (
+        <p
+          key={i}
+          className="text-text-primary text-sm font-[family-name:var(--font-mono)]"
+          style={{ color: entry.fill || entry.color }}
+        >
+          Count: {entry.value}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function MetricExplorerTab({ activeMode }: { activeMode: string }) {
+  const [selectedMetric, setSelectedMetric] = useState('prosody_score')
+  const [distribution, setDistribution] = useState<MetricDistribution | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    setError(null)
+    api.analytics
+      .metricDistribution(selectedMetric, activeMode)
+      .then((data) => {
+        setDistribution(data)
+        setLoading(false)
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load metric distribution')
+        setLoading(false)
+      })
+  }, [selectedMetric, activeMode])
+
+  const metricLabel = METRIC_OPTIONS.find((m) => m.value === selectedMetric)?.label ?? selectedMetric
+
+  if (loading) {
+    return (
+      <motion.div
+        key="metricExplorer"
+        variants={fadeIn}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="flex items-center justify-center py-20"
+      >
+        <div className="text-text-faint font-[family-name:var(--font-mono)] text-sm">
+          Loading metric distribution...
+        </div>
+      </motion.div>
+    )
+  }
+
+  if (error || !distribution) {
+    return (
+      <motion.div
+        key="metricExplorer"
+        variants={fadeIn}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="space-y-6"
+      >
+        {/* Still show the selector so user can switch metric */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="flex items-center gap-4"
+        >
+          <BarChart3 className="h-5 w-5 text-accent" />
+          <select
+            value={selectedMetric}
+            onChange={(e) => setSelectedMetric(e.target.value)}
+            className="bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-text-primary text-sm font-[family-name:var(--font-mono)] focus:outline-none focus:border-accent"
+          >
+            {METRIC_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </motion.div>
+        <div className="flex items-center justify-center py-16">
+          <div className="text-text-faint font-[family-name:var(--font-mono)] text-sm">
+            {error || 'No distribution data available for this metric and mode.'}
+          </div>
+        </div>
+      </motion.div>
+    )
+  }
+
+  const chartData = distribution.bins.map((b) => ({
+    range: formatBinRange(b.bin_start, b.bin_end),
+    count: b.count,
+  }))
+
+  const stats = computeSummaryStats(distribution.bins, distribution.total_values)
+
   return (
     <motion.div
-      key="fairness"
+      key="metricExplorer"
       variants={fadeIn}
       initial="hidden"
       animate="visible"
       exit="exit"
       className="space-y-8"
     >
-      {/* Heading */}
+      {/* Header with metric selector */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <div className="flex items-center gap-2.5 mb-1">
-          <Scale className="h-5 w-5 text-accent" />
+        <div className="flex items-center gap-4 mb-1">
+          <BarChart3 className="h-5 w-5 text-accent" />
           <h3 className="font-[family-name:var(--font-display)] text-lg text-text-primary">
-            Fairness Dashboard — ASR Accent Bias Analysis
+            Metric Explorer
           </h3>
+          <select
+            value={selectedMetric}
+            onChange={(e) => setSelectedMetric(e.target.value)}
+            className="bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-text-primary text-sm font-[family-name:var(--font-mono)] focus:outline-none focus:border-accent"
+          >
+            {METRIC_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </div>
-        <p className="text-text-faint text-xs font-[family-name:var(--font-mono)]">
-          Word Error Rate (WER) comparison across demographic accent groups
+        <p className="text-text-faint text-xs font-[family-name:var(--font-mono)] ml-9">
+          Distribution of {metricLabel} across all evaluations
         </p>
       </motion.div>
 
-      {/* WER Table */}
-      <motion.div
-        variants={slideUp}
-        initial="hidden"
-        animate="visible"
-        className="bg-bg-surface rounded-xl border border-border-default p-6"
-      >
-        <h4 className="text-text-primary font-medium mb-4">WER by Accent Group</h4>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border-default">
-                <th className="text-left py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
-                  Model
-                </th>
-                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
-                  Gen. American (%)
-                </th>
-                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
-                  AAE (%)
-                </th>
-                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
-                  Indian English (%)
-                </th>
-                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
-                  Latin American (%)
-                </th>
-                <th className="text-right py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
-                  FAAS Score
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {fairnessData.map((row, idx) => {
-                const { min, max } = getWerExtremes(row)
-                return (
-                  <motion.tr
-                    key={row.model}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.4, delay: idx * 0.08 }}
-                    className="border-b border-border-default/50 last:border-0"
-                  >
-                    <td className="py-3.5 px-3 text-text-primary font-medium whitespace-nowrap">
-                      {row.model}
-                    </td>
-                    <td className={`py-3.5 px-3 text-right font-[family-name:var(--font-mono)] ${werCellClass(row.genAm, min, max)}`}>
-                      {row.genAm.toFixed(1)}
-                    </td>
-                    <td className={`py-3.5 px-3 text-right font-[family-name:var(--font-mono)] ${werCellClass(row.aae, min, max)}`}>
-                      {row.aae.toFixed(1)}
-                    </td>
-                    <td className={`py-3.5 px-3 text-right font-[family-name:var(--font-mono)] ${werCellClass(row.indian, min, max)}`}>
-                      {row.indian.toFixed(1)}
-                    </td>
-                    <td className={`py-3.5 px-3 text-right font-[family-name:var(--font-mono)] ${werCellClass(row.latAm, min, max)}`}>
-                      {row.latAm.toFixed(1)}
-                    </td>
-                    <td className="py-3.5 px-3 text-right">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-[family-name:var(--font-mono)] font-medium ${faasPillClass(row.faas)}`}
-                      >
-                        {row.faas}
-                      </span>
-                    </td>
-                  </motion.tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </motion.div>
-
-      {/* WER Disparity Bar Chart */}
+      {/* Histogram */}
       <motion.div
         variants={slideUp}
         initial="hidden"
@@ -728,62 +847,74 @@ function FairnessTab() {
         className="bg-bg-surface rounded-xl border border-border-default p-6"
       >
         <h4 className="text-text-primary font-medium mb-1">
-          WER Disparity Across Accent Groups
+          {metricLabel} Distribution
         </h4>
         <p className="text-text-faint text-xs font-[family-name:var(--font-mono)] mb-6">
-          Grouped comparison of Word Error Rate per model and accent
+          {distribution.total_values.toLocaleString()} total values across {distribution.bins.length} bins
         </p>
 
-        <div className="h-72">
+        <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
-              data={fairnessData.map((row) => ({
-                model: row.model.replace(/\s+/g, '\n'),
-                'Gen. American': row.genAm,
-                'AAE': row.aae,
-                'Indian English': row.indian,
-                'Latin American': row.latAm,
-              }))}
+              data={chartData}
               margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
-              barCategoryGap="20%"
-              barGap={3}
+              barCategoryGap="10%"
             >
               <CartesianGrid vertical={false} stroke="#1C1E2E" />
               <XAxis
-                dataKey="model"
-                tick={{ fill: '#888899', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                dataKey="range"
+                tick={{ fill: '#888899', fontSize: 10, fontFamily: 'var(--font-mono)' }}
                 axisLine={{ stroke: '#1C1E2E' }}
                 tickLine={false}
+                interval="preserveStartEnd"
+                angle={-35}
+                textAnchor="end"
+                height={60}
               />
               <YAxis
-                tickFormatter={(v: number) => `${v}%`}
                 tick={{ fill: '#4E4E5E', fontSize: 11, fontFamily: 'var(--font-mono)' }}
                 axisLine={false}
                 tickLine={false}
               />
               <Tooltip
-                content={<CustomTooltipWer />}
+                content={<MetricExplorerTooltip />}
                 cursor={{ fill: 'rgba(255,255,255,0.03)' }}
               />
-              <Bar dataKey="Gen. American" fill={ACCENT_COLORS.genAm} radius={[4, 4, 0, 0]} animationDuration={1000} />
-              <Bar dataKey="AAE" fill={ACCENT_COLORS.aae} radius={[4, 4, 0, 0]} animationDuration={1000} animationBegin={100} />
-              <Bar dataKey="Indian English" fill={ACCENT_COLORS.indian} radius={[4, 4, 0, 0]} animationDuration={1000} animationBegin={200} />
-              <Bar dataKey="Latin American" fill={ACCENT_COLORS.latAm} radius={[4, 4, 0, 0]} animationDuration={1000} animationBegin={300} />
+              <Bar
+                dataKey="count"
+                fill="#2DD4A8"
+                radius={[4, 4, 0, 0]}
+                animationDuration={1000}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </motion.div>
 
-        {/* Legend */}
-        <div className="flex flex-wrap gap-5 mt-4 pt-4 border-t border-border-default">
-          {Object.entries(ACCENT_LABELS).map(([key, label]) => (
-            <div key={key} className="flex items-center gap-2">
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: ACCENT_COLORS[key] }}
-              />
-              <span className="text-text-body text-xs font-[family-name:var(--font-mono)]">
-                {label}
-              </span>
+      {/* Summary Stats */}
+      <motion.div
+        variants={slideUp}
+        initial="hidden"
+        animate="visible"
+        className="bg-bg-surface rounded-xl border border-border-default p-6"
+      >
+        <h4 className="text-text-primary font-medium mb-4">Summary Statistics</h4>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          {[
+            { label: 'Total Values', value: distribution.total_values.toLocaleString() },
+            { label: 'Min', value: formatStatValue(stats.min) },
+            { label: 'Max', value: formatStatValue(stats.max) },
+            { label: 'Mean', value: formatStatValue(stats.mean) },
+            { label: 'Median', value: formatStatValue(stats.median) },
+            { label: 'Std Dev', value: formatStatValue(stats.stdDev) },
+          ].map((stat) => (
+            <div key={stat.label} className="text-center">
+              <p className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] text-text-faint mb-1">
+                {stat.label}
+              </p>
+              <p className="font-[family-name:var(--font-mono)] text-lg text-text-primary">
+                {stat.value}
+              </p>
             </div>
           ))}
         </div>
@@ -882,8 +1013,8 @@ export default function AnalyticsPage() {
         return <VoteAnalyticsTab apiSummary={apiSummary} activeMode={activeMode} />
       case 'correlations':
         return <ProviderComparisonTab activeMode={activeMode} />
-      case 'fairness':
-        return <FairnessTab />
+      case 'metricExplorer':
+        return <MetricExplorerTab activeMode={activeMode} />
       case 'papers':
         return <PapersTab />
       case 'dataset':

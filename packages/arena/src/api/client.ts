@@ -146,6 +146,12 @@ export interface ProviderComparison {
   avg_dnsmos: number;
 }
 
+export interface MetricDistribution {
+  metric: string;
+  total_values: number;
+  bins: { bin_start: number; bin_end: number; count: number }[];
+}
+
 export interface PromptItem {
   id: string;
   text: string;
@@ -547,6 +553,10 @@ export const api = {
       ).toString();
       return request<Record<string, unknown>[]>(`/analytics/battles${qs ? `?${qs}` : ''}`);
     },
+    metricDistribution: (metric: string, battleType: string, bins?: number) =>
+      request<MetricDistribution>(
+        `/analytics/metric-distribution?metric=${metric}&battle_type=${battleType}${bins ? `&bins=${bins}` : ''}`
+      ),
     modelBreakdown: (modelId: string, battleType: string = 'tts') =>
       request<ModelBreakdown>(`/analytics/model-breakdown/${modelId}?battle_type=${battleType}`),
     exportUrl: (params?: { battle_type?: string; format?: string }) => {
