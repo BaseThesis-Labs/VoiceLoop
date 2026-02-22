@@ -30,12 +30,39 @@ export interface Model {
   name: string;
   provider: string;
   version: string;
+  model_type: string;
   config_json: Record<string, unknown> | null;
   elo_rating: number;
   total_battles: number;
   win_rate: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface ModelBreakdown {
+  model_id: string;
+  model_name: string;
+  provider: string;
+  battle_type: string;
+  total_battles: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  opponents: {
+    model_id: string;
+    model_name: string;
+    provider: string;
+    wins: number;
+    losses: number;
+    ties: number;
+  }[];
+  avg_metrics: {
+    avg_ttfb: number | null;
+    avg_e2e_latency: number | null;
+    avg_generation_time: number | null;
+    avg_duration: number | null;
+  };
+  elo_history: { date: string; elo_rating: number }[];
 }
 
 export interface Scenario {
@@ -507,7 +534,7 @@ export const api = {
       return request<Record<string, unknown>[]>(`/analytics/battles${qs ? `?${qs}` : ''}`);
     },
     modelBreakdown: (modelId: string, battleType: string = 'tts') =>
-      request<Record<string, unknown>>(`/analytics/model-breakdown/${modelId}?battle_type=${battleType}`),
+      request<ModelBreakdown>(`/analytics/model-breakdown/${modelId}?battle_type=${battleType}`),
     exportUrl: (params?: { battle_type?: string; format?: string }) => {
       const qs = new URLSearchParams(
         Object.entries(params || {}).filter(([, v]) => v != null) as [string, string][]
