@@ -20,7 +20,6 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts'
-import { arenaStats as mockArenaStats, metricCorrelations, fairnessData } from '../data/mockData'
 import { api, type AnalyticsSummary, type ProviderComparison, type MetricDistribution } from '../api/client'
 import { ModeSelector, getStoredMode, type BattleMode } from '../components/ModeSelector'
 
@@ -40,26 +39,12 @@ interface TabDef {
 // ============================================================
 
 const TABS: TabDef[] = [
-  { id: 'votes', label: 'Vote Analytics' },
-  { id: 'correlations', label: 'Provider Comparison' },
-  { id: 'metricExplorer', label: 'Metric Explorer' },
+  { id: 'votes', label: 'Votes' },
+  { id: 'correlations', label: 'Providers' },
+  { id: 'metricExplorer', label: 'Metrics' },
   { id: 'papers', label: 'Papers' },
-  { id: 'dataset', label: 'Dataset' },
+  { id: 'dataset', label: 'Export' },
 ]
-
-const ACCENT_COLORS: Record<string, string> = {
-  genAm: '#2DD4A8',
-  aae: '#6366f1',
-  indian: '#f59e0b',
-  latAm: '#ec4899',
-}
-
-const ACCENT_LABELS: Record<string, string> = {
-  genAm: 'Gen. American',
-  aae: 'AAE',
-  indian: 'Indian English',
-  latAm: 'Latin American',
-}
 
 // ============================================================
 // Animation Variants
@@ -105,48 +90,6 @@ const slideUp = {
 }
 
 // ============================================================
-// Helpers
-// ============================================================
-
-function correlationColor(r: number): string {
-  if (r >= 0.6) return 'text-accent'
-  if (r >= 0.5) return 'text-text-body'
-  return 'text-text-faint'
-}
-
-function correlationBarColor(r: number): string {
-  if (r >= 0.6) return '#2DD4A8'
-  if (r >= 0.5) return '#888899'
-  return '#4E4E5E'
-}
-
-function getWerExtremes(row: typeof fairnessData[number]) {
-  const vals = [row.genAm, row.aae, row.indian, row.latAm]
-  const min = Math.min(...vals)
-  const max = Math.max(...vals)
-  return { min, max }
-}
-
-function werCellClass(value: number, min: number, max: number): string {
-  if (value === max) return 'text-[#ef4444]'
-  if (value === min) return 'text-accent'
-  return 'text-text-primary'
-}
-
-function faasPillClass(faas: string): string {
-  switch (faas) {
-    case 'Fair':
-      return 'bg-accent/10 text-accent'
-    case 'Moderately Fair':
-      return 'bg-yellow-500/10 text-yellow-500'
-    case 'Severely Biased':
-      return 'bg-red-500/10 text-red-400'
-    default:
-      return 'bg-bg-hover text-text-body'
-  }
-}
-
-// ============================================================
 // Custom Recharts Tooltip
 // ============================================================
 
@@ -172,34 +115,6 @@ function CustomTooltip({
           style={{ color: entry.fill || entry.color }}
         >
           {entry.name ? `${entry.name}: ` : ''}{entry.value}%
-        </p>
-      ))}
-    </div>
-  )
-}
-
-function CustomTooltipWer({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean
-  payload?: Array<{ value: number; name?: string; fill?: string; color?: string; dataKey?: string }>
-  label?: string
-}) {
-  if (!active || !payload || payload.length === 0) return null
-  return (
-    <div className="bg-bg-surface border border-border-default rounded-lg px-4 py-3 shadow-xl">
-      <p className="text-text-faint text-xs font-[family-name:var(--font-mono)] uppercase tracking-wider mb-1.5">
-        {label}
-      </p>
-      {payload.map((entry, i) => (
-        <p
-          key={i}
-          className="text-sm font-[family-name:var(--font-mono)]"
-          style={{ color: entry.fill || entry.color }}
-        >
-          {entry.name}: {entry.value}% WER
         </p>
       ))}
     </div>
@@ -234,12 +149,7 @@ function VoteAnalyticsTab({ apiSummary, activeMode }: { apiSummary: AnalyticsSum
         { label: 'Evaluations', value: apiSummary.completed_evaluations.toLocaleString(), icon: BarChart3 },
         { label: 'Scenarios', value: apiSummary.total_scenarios.toLocaleString(), icon: Scale },
       ]
-    : [
-        { label: 'Total Votes', value: mockArenaStats.totalVotes.toLocaleString(), icon: Vote },
-        { label: 'Unique Voters', value: mockArenaStats.uniqueVoters.toLocaleString(), icon: Users },
-        { label: 'Avg Battles / Voter', value: mockArenaStats.avgBattlesPerVoter.toFixed(1), icon: BarChart3 },
-        { label: "Krippendorff's \u03B1", value: mockArenaStats.interRaterAgreement.toFixed(2), icon: Scale },
-      ]
+    : null
 
   return (
     <motion.div
@@ -251,30 +161,41 @@ function VoteAnalyticsTab({ apiSummary, activeMode }: { apiSummary: AnalyticsSum
       className="space-y-8"
     >
       {/* Stats Cards */}
-      <motion.div
-        variants={staggerContainer}
-        initial="hidden"
-        animate="visible"
-        className="grid grid-cols-2 lg:grid-cols-4 gap-4"
-      >
-        {stats.map((stat) => (
-          <motion.div
-            key={stat.label}
-            variants={staggerChild}
-            className="bg-bg-surface rounded-xl border border-border-default p-5"
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <stat.icon className="h-4 w-4 text-text-faint" />
-              <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] text-text-faint">
-                {stat.label}
-              </span>
+      {stats ? (
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+          className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+        >
+          {stats.map((stat) => (
+            <motion.div
+              key={stat.label}
+              variants={staggerChild}
+              className="bg-bg-surface rounded-xl border border-border-default p-5"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <stat.icon className="h-4 w-4 text-text-faint" />
+                <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] text-text-faint">
+                  {stat.label}
+                </span>
+              </div>
+              <p className="font-[family-name:var(--font-mono)] text-2xl lg:text-3xl font-medium text-text-primary">
+                {stat.value}
+              </p>
+            </motion.div>
+          ))}
+        </motion.div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-bg-surface rounded-xl border border-border-default p-5 animate-pulse">
+              <div className="h-4 w-24 bg-bg-hover rounded mb-3" />
+              <div className="h-8 w-16 bg-bg-hover rounded" />
             </div>
-            <p className="font-[family-name:var(--font-mono)] text-2xl lg:text-3xl font-medium text-text-primary">
-              {stat.value}
-            </p>
-          </motion.div>
-        ))}
-      </motion.div>
+          ))}
+        </div>
+      )}
 
       {/* Vote Distribution Chart */}
       <motion.div
@@ -1151,7 +1072,7 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     api.analytics.summary().then(setApiSummary).catch(() => {
-      // Fallback to mock data (apiSummary stays null)
+      // apiSummary stays null; stats cards show loading skeleton
     })
   }, [])
 
