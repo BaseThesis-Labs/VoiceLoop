@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { Link } from 'react-router-dom'
-import { api, type LeaderboardEntry, type MetricConfig, type LeaderboardResponse } from '../api/client'
+import { api, type LeaderboardEntry, type MetricConfig } from '../api/client'
 import { ModeSelector, getStoredMode, type BattleMode } from '../components/ModeSelector'
 
 // ---------------------------------------------------------------------------
@@ -87,7 +87,7 @@ function buildRadarData(
 
   return dims.map((d) => {
     const vals = allEntries
-      .map((e) => d.fromMetrics ? e.metrics[d.key] : (e as Record<string, unknown>)[d.key] as number | null)
+      .map((e) => d.fromMetrics ? e.metrics[d.key] : (e as unknown as Record<string, unknown>)[d.key] as number | null)
       .filter((v): v is number => v != null)
     if (vals.length === 0) {
       const row: RadarDimension = { dimension: d.dimension, fullMark: 100 }
@@ -98,7 +98,7 @@ function buildRadarData(
     const max = Math.max(...vals)
     const row: RadarDimension = { dimension: d.dimension, fullMark: 100 }
     topEntries.forEach((e, i) => {
-      const raw = (d.fromMetrics ? e.metrics[d.key] : (e as Record<string, unknown>)[d.key] as number | null) ?? (d.invert ? max : min)
+      const raw = (d.fromMetrics ? e.metrics[d.key] : (e as unknown as Record<string, unknown>)[d.key] as number | null) ?? (d.invert ? max : min)
       row[`model${i}`] = Math.round(normalize(raw as number, min, max, d.invert))
     })
     return row
