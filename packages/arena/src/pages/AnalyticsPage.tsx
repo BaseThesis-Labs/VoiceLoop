@@ -947,7 +947,72 @@ function PapersTab() {
   )
 }
 
+function formatBattleDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function truncatePrompt(text: string, maxLen = 50): string {
+  if (!text || text.length <= maxLen) return text || ''
+  return text.slice(0, maxLen) + '\u2026'
+}
+
+function buildModelsLabel(row: Record<string, unknown>): string {
+  const parts: string[] = []
+  if (row.model_a_name) parts.push(String(row.model_a_name))
+  if (row.model_b_name) parts.push(String(row.model_b_name))
+  if (row.model_c_name) parts.push(String(row.model_c_name))
+  if (row.model_d_name) parts.push(String(row.model_d_name))
+  return parts.join(' vs ')
+}
+
+function winnerBadge(winner: string | null | undefined) {
+  if (!winner) return <span className="text-text-faint text-xs">--</span>
+  const w = String(winner).toLowerCase()
+  if (w === 'tie') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-[family-name:var(--font-mono)] uppercase tracking-wider bg-bg-hover text-text-faint border border-border-default">
+        tie
+      </span>
+    )
+  }
+  if (w === 'all_bad') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-[family-name:var(--font-mono)] uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20">
+        all bad
+      </span>
+    )
+  }
+  // a, b, c, d — winner badges
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-[family-name:var(--font-mono)] uppercase tracking-wider bg-accent/10 text-accent border border-accent/20">
+      {w}
+    </span>
+  )
+}
+
 function DatasetTab({ activeMode }: { activeMode: string }) {
+  const [battles, setBattles] = useState<Record<string, unknown>[]>([])
+  const [loading, setLoading] = useState(true)
+  const [columnCount, setColumnCount] = useState<number>(0)
+
+  useEffect(() => {
+    setLoading(true)
+    api.analytics
+      .battleHistory({ battle_type: activeMode, limit: 10 })
+      .then((data) => {
+        setBattles(data)
+        if (data.length > 0) {
+          setColumnCount(Object.keys(data[0]).length)
+        }
+        setLoading(false)
+      })
+      .catch(() => {
+        setBattles([])
+        setLoading(false)
+      })
+  }, [activeMode])
+
   const exportCsvUrl = api.analytics.exportUrl({ battle_type: activeMode, format: 'csv' })
   const exportJsonUrl = api.analytics.exportUrl({ battle_type: activeMode, format: 'json' })
 
@@ -958,7 +1023,90 @@ function DatasetTab({ activeMode }: { activeMode: string }) {
       initial="hidden"
       animate="visible"
       exit="exit"
+      className="space-y-8"
     >
+      {/* Preview Table */}
+      <motion.div
+        variants={slideUp}
+        initial="hidden"
+        animate="visible"
+        className="bg-bg-surface rounded-xl border border-border-default p-6"
+      >
+        <h3 className="font-[family-name:var(--font-display)] text-lg text-text-primary mb-1">
+          Recent Battles
+        </h3>
+        <p className="text-text-faint text-xs font-[family-name:var(--font-mono)] mb-6">
+          Last 10 battles for the selected mode
+        </p>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-text-faint font-[family-name:var(--font-mono)] text-sm">
+              Loading battle history...
+            </div>
+          </div>
+        ) : battles.length === 0 ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-text-faint font-[family-name:var(--font-mono)] text-sm">
+              No battle data available for this mode.
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border-default">
+                  <th className="text-left py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
+                    Date
+                  </th>
+                  <th className="text-left py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
+                    Prompt
+                  </th>
+                  <th className="text-left py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
+                    Models
+                  </th>
+                  <th className="text-center py-3 px-3 text-text-faint font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.15em] font-medium">
+                    Winner
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {battles.map((row, idx) => (
+                  <motion.tr
+                    key={String(row.battle_id ?? idx)}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.4, delay: idx * 0.05 }}
+                    className="border-b border-border-default/50 last:border-0"
+                  >
+                    <td className="py-3 px-3 font-[family-name:var(--font-mono)] text-text-body text-xs whitespace-nowrap">
+                      {row.created_at ? formatBattleDate(String(row.created_at)) : '--'}
+                    </td>
+                    <td className="py-3 px-3 text-text-primary text-xs max-w-[260px] truncate" title={String(row.prompt_text ?? '')}>
+                      {truncatePrompt(String(row.prompt_text ?? ''))}
+                    </td>
+                    <td className="py-3 px-3 font-[family-name:var(--font-mono)] text-text-body text-xs whitespace-nowrap">
+                      {buildModelsLabel(row)}
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      {winnerBadge(row.winner as string | null | undefined)}
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Column count indicator */}
+        {columnCount > 0 && (
+          <p className="text-text-faint text-xs text-center italic mt-4 font-[family-name:var(--font-mono)]">
+            Export includes {columnCount} columns with per-model evaluation metrics
+          </p>
+        )}
+      </motion.div>
+
+      {/* Export Buttons */}
       <div className="bg-bg-surface rounded-xl border border-border-default p-8 flex flex-col items-center text-center py-20">
         <div className="h-14 w-14 rounded-xl bg-accent/10 flex items-center justify-center mb-6">
           <Download className="h-7 w-7 text-accent" />
