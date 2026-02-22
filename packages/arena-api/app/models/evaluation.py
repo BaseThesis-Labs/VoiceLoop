@@ -18,3 +18,6 @@ class Evaluation(Base, TimestampMixin):
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript_output: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ttfb_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    e2e_latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    generation_time_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
