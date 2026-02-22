@@ -183,6 +183,25 @@ async def _query_agent_leaderboard(
     return entries
 
 
+@router.post("/snapshot")
+async def create_snapshot(
+    battle_type: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger snapshot creation. If no battle_type specified, create for all types."""
+    from app.services.snapshot_service import create_daily_snapshot
+
+    if battle_type:
+        count = await create_daily_snapshot(db, battle_type)
+        return {"created": count, "battle_type": battle_type}
+
+    total = 0
+    for bt in VALID_BATTLE_TYPES:
+        count = await create_daily_snapshot(db, bt)
+        total += count
+    return {"created": total, "battle_types": list(VALID_BATTLE_TYPES)}
+
+
 @router.get("/history")
 async def get_leaderboard_history(
     model_id: str | None = None,
